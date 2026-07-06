@@ -9,6 +9,7 @@ Native iOS app for making Live Photo and image collages.
 - **九宫格切图**：一张图片切成 9 张方图，适合朋友圈/社交平台发布。
 - **本机保存**：通过 PhotoKit 写入系统相册，不依赖服务端。
 - **中英双语**：App 内可切换中文/英文，系统权限文案也支持中英本地化。
+- **隐私政策**：App 内置隐私政策页面，公开文档见 [docs/privacy-policy.md](docs/privacy-policy.md)。
 
 ## Tech
 

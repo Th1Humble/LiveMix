@@ -20,6 +20,7 @@ struct CollageCoreTests {
         testSplitNineProducesNineTiles()
         testAppLanguageTranslationsAndToggle()
         testImageGenerationLoadingCopy()
+        testPrivacyPolicyContentIsLocalized()
         print("CollageCoreTests passed")
     }
 
@@ -229,6 +230,20 @@ struct CollageCoreTests {
         expect(ImageGenerationFeedback.splitNineTitle(language: .zhHans) == "正在切图...", "split-nine overlay should have Chinese loading copy")
         expect(ImageGenerationFeedback.splitNineTitle(language: .en) == "Splitting image...", "split-nine overlay should have English loading copy")
         expect(ImageGenerationFeedback.minimumVisibleNanoseconds > 0, "loading feedback should stay visible for at least one render window")
+    }
+
+    private static func testPrivacyPolicyContentIsLocalized() {
+        let zhPolicy = AppPrivacyPolicy.content(language: .zhHans)
+        let enPolicy = AppPrivacyPolicy.content(language: .en)
+
+        expect(zhPolicy.title == "隐私政策", "privacy policy should have Chinese title")
+        expect(enPolicy.title == "Privacy Policy", "privacy policy should have English title")
+        expect(zhPolicy.sections.count >= 6, "privacy policy should cover the important privacy topics")
+        expect(enPolicy.sections.count == zhPolicy.sections.count, "privacy policy sections should stay aligned across languages")
+        expect(zhPolicy.sections.contains(where: { $0.body.contains("本机处理") }), "Chinese policy should explain local processing")
+        expect(enPolicy.sections.contains(where: { $0.body.contains("processed on your device") }), "English policy should explain local processing")
+        expect(zhPolicy.sections.contains(where: { $0.body.contains("humility921@outlook.com") }), "Chinese policy should include support email")
+        expect(enPolicy.sections.contains(where: { $0.body.contains("humility921@outlook.com") }), "English policy should include support email")
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {

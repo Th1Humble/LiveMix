@@ -160,6 +160,17 @@ private struct HomeScreen: View {
                     HomeCapabilityStrip()
 
                     HomeFeedbackLink()
+
+                    NavigationLink {
+                        PrivacyPolicyScreen()
+                    } label: {
+                        Text(language.text(.privacyPolicy))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppTheme.faint)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 2)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
@@ -447,6 +458,62 @@ private struct HomeFeedbackLink: View {
             .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct PrivacyPolicyScreen: View {
+    @Environment(\.appLanguage) private var language
+
+    private var policy: AppPrivacyPolicyContent {
+        AppPrivacyPolicy.content(language: language)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PageTopBar(backLabel: language.text(.backHome)) {
+                Badge(text: "LiveMix", tone: .neutral)
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(policy.title)
+                            .font(.system(size: 30, weight: .semibold))
+                            .foregroundStyle(AppTheme.ink)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                        Text(policy.updatedAt)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.faint)
+                        Text(policy.intro)
+                            .font(.system(size: 14))
+                            .lineSpacing(4)
+                            .foregroundStyle(AppTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        ForEach(policy.sections) { section in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(section.title)
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(AppTheme.ink)
+                                Text(section.body)
+                                    .font(.system(size: 14))
+                                    .lineSpacing(4)
+                                    .foregroundStyle(AppTheme.muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
+                .padding(.bottom, 34)
+            }
+        }
+        .background(Color.white)
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
