@@ -1,0 +1,14 @@
+node_modules/
+dist/
+tmp/
+uploads/
+*.log
+.DS_Store
+DerivedData/
+ios/**/DerivedData/
+*.xcuserdata/
+xcuserdata/
+*.xcuserstate
+*.agents/
+*.impeccable/
+output/
