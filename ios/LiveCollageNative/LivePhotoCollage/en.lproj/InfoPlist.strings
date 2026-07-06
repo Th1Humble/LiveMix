@@ -1,0 +1,2 @@
+"NSPhotoLibraryAddUsageDescription" = "LiveMix needs access to save generated Live Photos, collages, and 9-grid images to your Photos library.";
+"NSPhotoLibraryUsageDescription" = "LiveMix needs access to selected photos and videos to create Live Photos and collages on this device.";

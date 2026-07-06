@@ -6,7 +6,15 @@ import UIKit
 import UniformTypeIdentifiers
 
 struct ContentView: View {
+    @AppStorage("app.language") private var languageRaw = ""
     @State private var isSplashVisible = true
+
+    private var appLanguage: AppLanguage {
+        if let storedLanguage = AppLanguage(rawValue: languageRaw) {
+            return storedLanguage
+        }
+        return .preferred
+    }
 
     var body: some View {
         ZStack {
@@ -25,6 +33,19 @@ struct ContentView: View {
                 .zIndex(10)
             }
         }
+        .environment(\.appLanguage, appLanguage)
+        .environment(\.locale, Locale(identifier: appLanguage.localeIdentifier))
+    }
+}
+
+private struct AppLanguageKey: EnvironmentKey {
+    static let defaultValue: AppLanguage = .preferred
+}
+
+private extension EnvironmentValues {
+    var appLanguage: AppLanguage {
+        get { self[AppLanguageKey.self] }
+        set { self[AppLanguageKey.self] = newValue }
     }
 }
 
@@ -45,6 +66,7 @@ private enum AppTheme {
 
 private struct AppSplashScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.appLanguage) private var language
 
     let onFinished: () -> Void
 
@@ -65,7 +87,7 @@ private struct AppSplashScreen: View {
                     Text("LiveMix")
                         .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
-                    Text("几段视频，一张 Live Photo")
+                    Text(language.text(.splashTagline))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(AppTheme.muted)
                 }
@@ -102,6 +124,8 @@ private struct AppSplashScreen: View {
 }
 
 private struct HomeScreen: View {
+    @Environment(\.appLanguage) private var language
+
     var body: some View {
         VStack(spacing: 0) {
             HomeTopBar()
@@ -109,12 +133,12 @@ private struct HomeScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text("选择一种拼接方式？")
+                        Text(language.text(.homeTitle))
                             .font(.system(size: 28, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
-                        Text("选中入口，即刻开始。")
+                        Text(language.text(.homeSubtitle))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(AppTheme.muted)
                     }
@@ -149,6 +173,9 @@ private struct HomeScreen: View {
 }
 
 private struct HomeTopBar: View {
+    @Environment(\.appLanguage) private var language
+    @AppStorage("app.language") private var languageRaw = ""
+
     var body: some View {
         HStack(spacing: 11) {
             BrandMark(size: 38)
@@ -157,18 +184,29 @@ private struct HomeTopBar: View {
                 Text("LiveMix")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppTheme.ink)
-                Text("把精彩，拼成一张 Live。")
+                Text(language.text(.homeTopTagline))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppTheme.faint)
             }
 
             Spacer()
 
+            Button {
+                languageRaw = language.next.rawValue
+            } label: {
+                Text(language.toggleTitle)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.primary)
+                    .frame(width: 36, height: 36)
+                    .background(AppTheme.primarySoft, in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+
             NavigationLink {
                 LiveTemplatePickerScreen()
             } label: {
                 HStack(spacing: 6) {
-                    Text("开始")
+                    Text(language.text(.start))
                     Image(systemName: "arrow.right")
                         .font(.system(size: 11, weight: .bold))
                 }
@@ -187,6 +225,8 @@ private struct HomeTopBar: View {
 }
 
 private struct HomeLiveEntryCard: View {
+    @Environment(\.appLanguage) private var language
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
@@ -195,12 +235,12 @@ private struct HomeLiveEntryCard: View {
                         Image(systemName: "livephoto")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppTheme.primary)
-                        Text("Video → Live")
+                        Text(language.text(.liveEntryTitle))
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                     }
 
-                    Text("多段视频，生成一张 Live Photo。")
+                    Text(language.text(.liveEntrySubtitle))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(AppTheme.muted)
                         .lineSpacing(3)
@@ -229,6 +269,8 @@ private struct HomeLiveEntryCard: View {
 }
 
 private struct HomeImageEntryCard: View {
+    @Environment(\.appLanguage) private var language
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
@@ -237,12 +279,12 @@ private struct HomeImageEntryCard: View {
                         Image(systemName: "square.grid.3x3")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppTheme.primary)
-                        Text("图片拼接")
+                        Text(language.text(.imageEntryTitle))
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                     }
 
-                    Text("支持图片、Live Photo 自由拼接。")
+                    Text(language.text(.imageEntrySubtitle))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(AppTheme.muted)
                 }
@@ -303,15 +345,17 @@ private struct HomeLiveTemplateMosaic: View {
 }
 
 private struct HomeImageModePreview: View {
+    @Environment(\.appLanguage) private var language
+
     var body: some View {
         HStack(spacing: 8) {
-            HomeImageModeTile(title: "左右") {
+            HomeImageModeTile(title: language.text(.horizontalShort)) {
                 ImageJoinArtworkPanel(mode: .horizontal)
             }
-            HomeImageModeTile(title: "上下") {
+            HomeImageModeTile(title: language.text(.verticalShort)) {
                 ImageJoinArtworkPanel(mode: .vertical)
             }
-            HomeImageModeTile(title: "九宫格") {
+            HomeImageModeTile(title: language.text(.gridShort)) {
                 SplitNinePreviewArtwork(lineWidth: 1)
             }
         }
@@ -340,20 +384,22 @@ private struct HomeImageModeTile<Artwork: View>: View {
 }
 
 private struct HomeCapabilityStrip: View {
-    private let items = [
-        ("模板", "丰富布局"),
-        ("画面", "自由拖拽"),
-        ("相册", "直接保存"),
+    @Environment(\.appLanguage) private var language
+
+    private let items: [(AppText, AppText)] = [
+        (.capabilityTemplates, .capabilityTemplatesDetail),
+        (.capabilityCanvas, .capabilityCanvasDetail),
+        (.capabilityAlbum, .capabilityAlbumDetail),
     ]
 
     var body: some View {
         HStack(spacing: 8) {
             ForEach(items, id: \.0) { item in
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(item.0)
+                    Text(language.text(item.0))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
-                    Text(item.1)
+                    Text(language.text(item.1))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(AppTheme.faint)
                         .lineLimit(1)
@@ -369,6 +415,8 @@ private struct HomeCapabilityStrip: View {
 }
 
 private struct HomeFeedbackLink: View {
+    @Environment(\.appLanguage) private var language
+
     private let email = "humility921@outlook.com"
 
     var body: some View {
@@ -381,7 +429,7 @@ private struct HomeFeedbackLink: View {
                     .background(AppTheme.primarySoft, in: RoundedRectangle(cornerRadius: 8))
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("问题反馈")
+                    Text(language.text(.feedback))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
                     Text(email)
@@ -509,25 +557,27 @@ private struct ImageJoinArtworkPanel: View {
 }
 
 private struct LiveTemplatePickerScreen: View {
+    @Environment(\.appLanguage) private var language
+
     private let columns = [
         GridItem(.adaptive(minimum: 168), spacing: 12),
     ]
 
     var body: some View {
         VStack(spacing: 0) {
-            PageTopBar(backLabel: "← 首页") {
-                Badge(text: "\(NativeCollageTemplate.liveTemplates.count) 个模板")
+            PageTopBar(backLabel: language.text(.backHome)) {
+                Badge(text: language.templateCount(NativeCollageTemplate.liveTemplates.count))
             }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("选择模板")
+                        Text(language.text(.templatesTitle))
                             .font(.system(size: 30, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
-                        Text("先选画面结构，再放视频。")
+                        Text(language.text(.templatesSubtitle))
                             .font(.system(size: 15))
                             .lineSpacing(4)
                             .foregroundStyle(AppTheme.muted)
@@ -555,6 +605,8 @@ private struct LiveTemplatePickerScreen: View {
 }
 
 private struct TemplateCard: View {
+    @Environment(\.appLanguage) private var language
+
     let template: NativeCollageTemplate
 
     var body: some View {
@@ -565,12 +617,13 @@ private struct TemplateCard: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
-                    Text(template.name)
+                    Text(template.localizedName(language))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.78)
                     Spacer()
-                    Text("\(template.slots.count) 段")
+                    Text(language.clipCount(template.slots.count))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppTheme.faint)
                         .padding(.horizontal, 8)
@@ -578,7 +631,7 @@ private struct TemplateCard: View {
                         .background(AppTheme.raised, in: Capsule())
                 }
 
-                Text(template.detail)
+                Text(template.localizedDetail(language))
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.muted)
                     .lineLimit(1)
@@ -595,6 +648,8 @@ private struct TemplateCard: View {
 }
 
 private struct LiveComposerScreen: View {
+    @Environment(\.appLanguage) private var language
+
     let template: NativeCollageTemplate
 
     private let composer = NativeLivePhotoComposer()
@@ -608,7 +663,7 @@ private struct LiveComposerScreen: View {
     @State private var isGenerating = false
     @State private var isResultPresented = false
     @State private var liveDraft: NativeLiveDraft?
-    @State private var message = "当前版本会在本机合成，不上传服务端。"
+    @State private var message: LiveComposerMessage = .localOnly
 
     init(template: NativeCollageTemplate) {
         self.template = template
@@ -619,20 +674,20 @@ private struct LiveComposerScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageTopBar(backLabel: "← 换模板") {
+            PageTopBar(backLabel: language.text(.backTemplate)) {
                 Badge(text: "\(filledCount)/\(template.slots.count)")
             }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text("\(template.name)模板 · \(template.slots.count) 段素材")
+                        Text(language.liveEditorKicker(template: template))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppTheme.primary)
-                        Text("填入视频并调整画面")
+                        Text(language.text(.fillVideosTitle))
                             .font(.system(size: 24, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
-                        Text("一次选择素材，选中槽位后调整画面和片段。")
+                        Text(language.text(.fillVideosSubtitle))
                             .font(.system(size: 14))
                             .lineSpacing(4)
                             .foregroundStyle(AppTheme.muted)
@@ -722,6 +777,9 @@ private struct LiveComposerScreen: View {
                     Text(bottomButtonTitle)
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(canGenerate ? Color.white : AppTheme.faint)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                        .padding(.horizontal, 12)
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
                         .background(canGenerate ? AppTheme.primary : AppTheme.raised, in: RoundedRectangle(cornerRadius: 12))
@@ -791,10 +849,10 @@ private struct LiveComposerScreen: View {
     }
 
     private var bottomButtonTitle: String {
-        if isGenerating { return "正在生成" }
-        if !loadingSlots.isEmpty { return "正在读取视频" }
+        if isGenerating { return language.text(.generating) }
+        if !loadingSlots.isEmpty { return language.text(.loadingVideo) }
         let missingCount = template.slots.count - filledCount
-        return missingCount == 0 ? "生成 Live Photo" : "还差 \(missingCount) 段视频"
+        return missingCount == 0 ? language.text(.generateLivePhoto) : language.missingVideos(missingCount)
     }
 
     private func selectableVideoLimit(startingAt index: Int) -> Int {
@@ -824,7 +882,7 @@ private struct LiveComposerScreen: View {
         }
 
         activeSlot = targetSlots[0]
-        message = targetSlots.count == 1 ? "正在读取视频..." : "正在读取 \(targetSlots.count) 段视频..."
+        message = targetSlots.count == 1 ? .loadingVideo : .loadingVideos(targetSlots.count)
 
         let assignments = zip(targetSlots, items).map { (slot: $0.0, item: $0.1) }
         Task {
@@ -838,7 +896,7 @@ private struct LiveComposerScreen: View {
         selectedItems[activeSlot] = item
         clearPreview(at: activeSlot)
         slotEdits[activeSlot] = NativeSlotEdit.default.withDuration(outputDuration)
-        message = "正在读取视频..."
+        message = .loadingVideo
 
         Task {
             await startVideoPreviewLoads(assignments: [(slot: activeSlot, item: item)])
@@ -866,7 +924,7 @@ private struct LiveComposerScreen: View {
             loadingSlots.remove(slot)
             normalizeAllEditsForLoadedDurations()
             if loadingSlots.isEmpty && filledCount > 0 {
-                message = filledCount == template.slots.count ? "素材已就绪，可以继续调整。" : "已选择 \(filledCount) 段视频。"
+                message = filledCount == template.slots.count ? .ready : .selectedVideos(filledCount)
             }
         }
 
@@ -877,7 +935,7 @@ private struct LiveComposerScreen: View {
         } catch {
             selectedItems[slot] = nil
             clearPreview(at: slot)
-            message = "视频 \(slot + 1) 暂时无法读取，请换一个视频。"
+            message = .unreadableVideo(slot)
         }
     }
 
@@ -952,12 +1010,12 @@ private struct LiveComposerScreen: View {
     private func generateLivePhoto() async {
         guard filledCount == template.slots.count,
               videoPreviews.allSatisfy({ $0 != nil }) else {
-            message = "请先选满当前模板需要的视频。"
+            message = .needAllVideos
             return
         }
 
         isGenerating = true
-        message = "正在本机合成 Live Photo..."
+        message = .composing
         defer { isGenerating = false }
 
         do {
@@ -965,14 +1023,54 @@ private struct LiveComposerScreen: View {
             let draft = try await composer.compose(template: template, videoURLs: sourceURLs, edits: slotEdits)
             liveDraft = draft
             isResultPresented = true
-            message = "Live Photo 已生成，可以保存到相册。"
+            message = .generated
         } catch {
-            message = (error as? LocalizedError)?.errorDescription ?? "生成失败，请换一组视频试试。"
+            message = .failed
+        }
+    }
+}
+
+private enum LiveComposerMessage: Hashable {
+    case localOnly
+    case loadingVideo
+    case loadingVideos(Int)
+    case unreadableVideo(Int)
+    case ready
+    case selectedVideos(Int)
+    case needAllVideos
+    case composing
+    case generated
+    case failed
+
+    func text(language: AppLanguage) -> String {
+        switch self {
+        case .localOnly:
+            return language.text(.localOnlyMessage)
+        case .loadingVideo:
+            return language.text(.loadingVideo) + "..."
+        case .loadingVideos(let count):
+            return language.loadingVideos(count)
+        case .unreadableVideo(let index):
+            return language.unreadableVideo(index)
+        case .ready:
+            return language.text(.liveReadyMessage)
+        case .selectedVideos(let count):
+            return language.selectedVideos(count)
+        case .needAllVideos:
+            return language.text(.needAllVideos)
+        case .composing:
+            return language.text(.composingLive)
+        case .generated:
+            return language.text(.liveGeneratedMessage)
+        case .failed:
+            return language.text(.liveGenerationFailed)
         }
     }
 }
 
 private struct LiveUploadPreview: View {
+    @Environment(\.appLanguage) private var language
+
     let template: NativeCollageTemplate
     let previews: [NativeVideoPreview?]
     let edits: [NativeSlotEdit]
@@ -1028,7 +1126,7 @@ private struct LiveUploadPreview: View {
 
                 if isGenerating {
                     Color.white.opacity(0.72)
-                    ProgressView("正在生成")
+                    ProgressView(language.text(.generating))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
                 }
@@ -1069,6 +1167,8 @@ private struct LiveUploadPreview: View {
 }
 
 private struct LiveUploadSlot: View {
+    @Environment(\.appLanguage) private var language
+
     let slot: CollageSlot
     let preview: NativeVideoPreview?
     let edit: NativeSlotEdit
@@ -1132,7 +1232,7 @@ private struct LiveUploadSlot: View {
             VStack(spacing: 7) {
                 ProgressView()
                     .tint(emptySlotAccent)
-                Text("正在读取")
+                Text(language.text(.loading))
                     .font(.system(size: 12, weight: .semibold))
             }
             .foregroundStyle(emptySlotAccent)
@@ -1160,7 +1260,7 @@ private struct LiveUploadSlot: View {
                             .font(.system(size: 30, weight: .regular))
                             .foregroundStyle(emptySlotAccent)
                             .lineLimit(1)
-                        Text("添加视频 \(slot.id + 1)")
+                        Text(language.addVideo(slot.id))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                             .lineLimit(1)
@@ -1213,7 +1313,7 @@ private struct LiveUploadSlot: View {
                 )
                 VStack {
                     HStack {
-                        Text("视频 \(slot.id + 1)")
+                        Text(language.videoSlot(slot.id))
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Color.white)
                             .padding(.horizontal, 8)
@@ -1224,7 +1324,7 @@ private struct LiveUploadSlot: View {
                     Spacer()
                     if isActive && edit.fitMode == .fill {
                         HStack {
-                            Text("拖动调整")
+                            Text(language.text(.dragToAdjust))
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(AppTheme.ink)
                                 .padding(.horizontal, 8)
@@ -1376,6 +1476,8 @@ private final class LoopingVideoPlayerView: UIView {
 }
 
 private struct NativeSlotSelector: View {
+    @Environment(\.appLanguage) private var language
+
     let totalCount: Int
     let activeSlot: Int
     let previews: [NativeVideoPreview?]
@@ -1394,7 +1496,7 @@ private struct NativeSlotSelector: View {
                         onSelect(index)
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("视频 \(index + 1)")
+                            Text(language.videoSlot(index))
                                 .font(.system(size: 12, weight: .semibold))
                             Text(slotSubtitle(preview: preview, isLoading: isLoading))
                                 .font(.system(size: 11, weight: .medium))
@@ -1419,15 +1521,17 @@ private struct NativeSlotSelector: View {
     }
 
     private func slotSubtitle(preview: NativeVideoPreview?, isLoading: Bool) -> String {
-        if isLoading { return "读取中" }
+        if isLoading { return language.text(.loadingShort) }
         if let duration = preview?.duration {
             return String(format: "%.2fs", duration)
         }
-        return "未选择"
+        return language.text(.notSelected)
     }
 }
 
 private struct NativeLiveEditControls: View {
+    @Environment(\.appLanguage) private var language
+
     let activeSlot: Int
     let activeEdit: NativeSlotEdit
     let activePreview: NativeVideoPreview?
@@ -1439,7 +1543,7 @@ private struct NativeLiveEditControls: View {
     let availableClipDuration: Double
     let activeMaxStart: Double
     let activeEndTime: Double
-    let message: String
+    let message: LiveComposerMessage
     let onFitModeChange: (NativeFitMode) -> Void
     let onZoomChange: (CGFloat) -> Void
     let onFocalXChange: (CGFloat) -> Void
@@ -1460,16 +1564,16 @@ private struct NativeLiveEditControls: View {
         VStack(alignment: .leading, spacing: 15) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("当前槽位")
+                    Text(language.text(.currentSlot))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppTheme.primary)
-                    Text("视频 \(activeSlot + 1)")
+                    Text(language.videoSlot(activeSlot))
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
                 }
                 Spacer()
                 PhotosPicker(selection: $replacementPickerItem, matching: .videos) {
-                    Text(hasMedia ? "替换" : "选择")
+                    Text(hasMedia ? language.text(.replace) : language.text(.choose))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
                         .frame(height: 36)
@@ -1484,14 +1588,14 @@ private struct NativeLiveEditControls: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("显示方式")
+                Text(language.text(.displayMode))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppTheme.ink)
                 HStack(spacing: 0) {
-                    ModePill(title: "填满裁切", isActive: activeEdit.fitMode == .fill) {
+                    ModePill(title: language.text(.fitFill), isActive: activeEdit.fitMode == .fill) {
                         onFitModeChange(.fill)
                     }
-                    ModePill(title: "完整展示", isActive: activeEdit.fitMode == .fit) {
+                    ModePill(title: language.text(.fitFull), isActive: activeEdit.fitMode == .fit) {
                         onFitModeChange(.fit)
                     }
                 }
@@ -1503,7 +1607,7 @@ private struct NativeLiveEditControls: View {
 
             VStack(spacing: 14) {
                 SliderControl(
-                    title: "缩放",
+                    title: language.text(.zoom),
                     valueText: String(format: "%.1fx", activeEdit.zoom),
                     value: Double(activeEdit.zoom),
                     range: 1...3,
@@ -1515,7 +1619,7 @@ private struct NativeLiveEditControls: View {
 
                 HStack(spacing: 12) {
                     SliderControl(
-                        title: "水平",
+                        title: language.text(.horizontal),
                         valueText: "\(Int(activeEdit.focalX * 100))%",
                         value: Double(activeEdit.focalX),
                         range: 0...1,
@@ -1526,7 +1630,7 @@ private struct NativeLiveEditControls: View {
                     }
 
                     SliderControl(
-                        title: "垂直",
+                        title: language.text(.vertical),
                         valueText: "\(Int(activeEdit.focalY * 100))%",
                         value: Double(activeEdit.focalY),
                         range: 0...1,
@@ -1538,7 +1642,7 @@ private struct NativeLiveEditControls: View {
                 }
 
                 SliderControl(
-                    title: "片段时长",
+                    title: language.text(.clipDuration),
                     valueText: String(format: "%.2fs", outputDuration),
                     value: outputDuration,
                     range: NativeSlotEdit.minDuration...max(NativeSlotEdit.minDuration, availableClipDuration),
@@ -1549,7 +1653,7 @@ private struct NativeLiveEditControls: View {
                 }
 
                 SliderControl(
-                    title: "起始时间",
+                    title: language.text(.startTime),
                     valueText: String(format: "%.2fs", activeEdit.start),
                     value: activeEdit.start,
                     range: 0...max(0, activeMaxStart),
@@ -1560,12 +1664,16 @@ private struct NativeLiveEditControls: View {
                 }
             }
 
-            Text(message)
+            Text(message.text(language: language))
                 .font(.system(size: 13))
                 .lineSpacing(3)
                 .foregroundStyle(AppTheme.muted)
 
-            Text(hasMedia ? "导出片段 \(String(format: "%.2fs", activeEdit.start)) - \(String(format: "%.2fs", activeEndTime)) · \(filledCount)/\(totalCount) 段" : "\(filledCount)/\(totalCount) 段素材")
+            Text(
+                hasMedia
+                ? language.exportRange(start: activeEdit.start, end: activeEndTime, filledCount: filledCount, totalCount: totalCount)
+                : language.materialProgress(filledCount: filledCount, totalCount: totalCount)
+            )
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AppTheme.faint)
         }
@@ -1640,6 +1748,8 @@ private struct SliderControl: View {
 }
 
 private struct VideoSlotPlaceholder: View {
+    @Environment(\.appLanguage) private var language
+
     let index: Int
     let isFilled: Bool
 
@@ -1648,7 +1758,7 @@ private struct VideoSlotPlaceholder: View {
             Image(systemName: isFilled ? "checkmark.circle.fill" : "plus")
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(isFilled ? AppTheme.primary : AppTheme.muted)
-            Text("视频 \(index + 1)")
+            Text(language.videoSlot(index))
                 .font(.caption.weight(.medium))
                 .foregroundStyle(AppTheme.muted)
         }
@@ -1663,22 +1773,25 @@ private struct VideoSlotPlaceholder: View {
 }
 
 private struct LiveResultScreen: View {
+    @Environment(\.appLanguage) private var language
+
     let draft: NativeLiveDraft
 
     @State private var isSaving = false
     @State private var didSave = false
-    @State private var status: String?
+    @State private var status: SaveStatusKind?
     @State private var isSaveError = false
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Live Photo 已生成")
+                    Text(language.text(.liveResultTitle))
                         .font(.system(size: 30, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
                         .lineLimit(1)
-                    Text("长按预览动态效果，确认无误后保存到相册。")
+                        .minimumScaleFactor(0.82)
+                    Text(language.text(.liveResultSubtitle))
                         .font(.footnote)
                         .foregroundStyle(AppTheme.muted)
 
@@ -1695,7 +1808,7 @@ private struct LiveResultScreen: View {
                     }
 
                     if let status {
-                        Text(status)
+                        Text(language.saveStatus(status))
                             .font(.footnote.weight(.medium))
                             .foregroundStyle(isSaveError ? AppTheme.error : (didSave ? AppTheme.primary : AppTheme.muted))
                     }
@@ -1705,7 +1818,7 @@ private struct LiveResultScreen: View {
             }
 
             BottomActionBar(
-                title: LiveResultPrimaryAction.title(isSaving: isSaving, didSave: didSave),
+                title: LiveResultPrimaryAction.title(isSaving: isSaving, didSave: didSave, language: language),
                 isDisabled: isSaving
             ) {
                 if didSave {
@@ -1719,11 +1832,11 @@ private struct LiveResultScreen: View {
         }
         .background(Color.white)
         .toolbar(.visible, for: .navigationBar)
-        .navigationTitle("预览")
+        .navigationTitle(language.text(.preview))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Badge(text: "已生成", tone: .neutral)
+                Badge(text: language.text(.generated), tone: .neutral)
             }
         }
     }
@@ -1740,11 +1853,11 @@ private struct LiveResultScreen: View {
             )
             didSave = true
             isSaveError = false
-            status = "已保存到相册，可直接打开相册查看。"
+            status = .saved
         } catch {
             didSave = false
             isSaveError = true
-            status = "保存失败，请检查相册权限后重试。"
+            status = .failed
         }
     }
 
@@ -1859,25 +1972,27 @@ private struct LivePhotoPreview: UIViewRepresentable {
 }
 
 private struct ImageToolPickerScreen: View {
+    @Environment(\.appLanguage) private var language
+
     private let columns = [
         GridItem(.adaptive(minimum: 168), spacing: 12),
     ]
 
     var body: some View {
         VStack(spacing: 0) {
-            PageTopBar(backLabel: "← 首页") {
-                Badge(text: "图片模式", tone: .neutral)
+            PageTopBar(backLabel: language.text(.backHome)) {
+                Badge(text: language.text(.imageMode), tone: .neutral)
             }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("图片拼接")
+                        Text(language.text(.imageToolsTitle))
                             .font(.system(size: 30, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
-                        Text("左右、上下，或者把一张图切成九宫格。")
+                        Text(language.text(.imageToolsSubtitle))
                             .font(.system(size: 15))
                             .lineSpacing(4)
                             .foregroundStyle(AppTheme.muted)
@@ -1888,8 +2003,8 @@ private struct ImageToolPickerScreen: View {
                             ImageJoinScreen(mode: .horizontal)
                         } label: {
                             ImageToolCard(
-                                title: "左右拼接",
-                                detail: "图片或 Live 横向合成一张。",
+                                title: language.text(.imageToolHorizontalTitle),
+                                detail: language.text(.imageToolHorizontalDetail),
                                 preview: .horizontal
                             )
                         }
@@ -1899,8 +2014,8 @@ private struct ImageToolPickerScreen: View {
                             ImageJoinScreen(mode: .vertical)
                         } label: {
                             ImageToolCard(
-                                title: "上下拼接",
-                                detail: "图片或 Live 纵向合成一张。",
+                                title: language.text(.imageToolVerticalTitle),
+                                detail: language.text(.imageToolVerticalDetail),
                                 preview: .vertical
                             )
                         }
@@ -1910,8 +2025,8 @@ private struct ImageToolPickerScreen: View {
                             SplitNineScreen()
                         } label: {
                             ImageToolCard(
-                                title: "一图切九宫格",
-                                detail: "一张图切成 9 张。",
+                                title: language.text(.imageToolGridTitle),
+                                detail: language.text(.imageToolGridDetail),
                                 preview: .grid
                             )
                         }
@@ -2153,6 +2268,8 @@ private enum NativeImageSourceLoader {
 }
 
 private struct ImageJoinScreen: View {
+    @Environment(\.appLanguage) private var language
+
     let mode: ImageJoinMode
 
     private let liveComposer = NativeImageJoinLiveComposer()
@@ -2182,18 +2299,18 @@ private struct ImageJoinScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageTopBar(backLabel: "← 图片拼接") {
-                Badge(text: "最多 \(maxImages) 张", tone: .neutral)
+            PageTopBar(backLabel: language.text(.backImageCollage)) {
+                Badge(text: language.maxImages(maxImages), tone: .neutral)
             }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(mode.title)
+                        Text(mode.localizedTitle(language))
                             .font(.system(size: 30, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                             .lineLimit(1)
-                        Text("多选图片或 Live Photo，在一张图里按方向等分拼好。")
+                        Text(language.text(.imageJoinSubtitle))
                             .font(.system(size: 14))
                             .lineSpacing(4)
                             .foregroundStyle(AppTheme.muted)
@@ -2217,6 +2334,7 @@ private struct ImageJoinScreen: View {
                                 mode: mode,
                                 activeIndex: activeIndex,
                                 isLoading: isLoading || isGenerating,
+                                loadingTitle: isGenerating ? ImageGenerationFeedback.imageJoinTitle(language: language) : nil,
                                 onEditChange: updateImageEdit
                             ) { index in
                                 activeIndex = index
@@ -2247,7 +2365,7 @@ private struct ImageJoinScreen: View {
                             )
 
                             if isLoading {
-                                Text("正在读取素材…")
+                                Text(language.text(.loadingMaterials) + "...")
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundStyle(AppTheme.muted)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -2282,7 +2400,7 @@ private struct ImageJoinScreen: View {
             if let generatedLiveDraft {
                 LiveResultScreen(draft: generatedLiveDraft)
             } else if let generatedImage {
-                ImageResultScreen(image: generatedImage.image, title: mode.title)
+                ImageResultScreen(image: generatedImage.image, title: mode.localizedTitle(language))
             }
         }
         .onChange(of: appendPickerItems) { newItems in
@@ -2302,10 +2420,10 @@ private struct ImageJoinScreen: View {
     }
 
     private var bottomActionTitle: String {
-        if sources.isEmpty { return "先选择图片" }
-        if isLoading { return "正在读取素材" }
-        if isGenerating { return "正在生成" }
-        return sources.contains(where: \.isLivePhoto) ? "生成 Live Photo" : "生成图片"
+        if sources.isEmpty { return language.text(.chooseImagesFirst) }
+        if isLoading { return language.text(.loadingMaterials) }
+        if isGenerating { return language.text(.generating) }
+        return sources.contains(where: \.isLivePhoto) ? language.text(.generateLivePhoto) : language.text(.generateImage)
     }
 
     @MainActor
@@ -2313,7 +2431,7 @@ private struct ImageJoinScreen: View {
         guard !items.isEmpty else { return }
         let slotsLeft = maxImages - sources.count
         guard slotsLeft > 0 else {
-            errorMessage = "最多只能选择 \(maxImages) 张图片。"
+            errorMessage = language.maxImagesExceeded(maxImages)
             return
         }
 
@@ -2329,7 +2447,7 @@ private struct ImageJoinScreen: View {
                 loadedSources.append(source)
             } catch NativeImageSourceLoader.LoadError.missingPairedVideo,
                     NativeImageSourceLoader.LoadError.resourceWriteFailed {
-                errorMessage = "有 Live Photo 的动态部分暂时无法读取，请换一张或确认它已从 iCloud 下载完成。"
+                errorMessage = language.text(.liveResourceUnavailablePlural)
             } catch {
                 continue
             }
@@ -2337,7 +2455,7 @@ private struct ImageJoinScreen: View {
 
         if loadedSources.isEmpty {
             if errorMessage == nil {
-                errorMessage = "这些素材暂时无法读取，请换一组试试。"
+                errorMessage = language.text(.unreadableMaterials)
             }
             return
         }
@@ -2351,7 +2469,7 @@ private struct ImageJoinScreen: View {
         generatedLiveDraft = nil
 
         if items.count > slotsLeft {
-            errorMessage = "最多 \(maxImages) 个素材，已保留前 \(slotsLeft) 个。"
+            errorMessage = language.maxMaterialsKept(slotsLeft)
         }
     }
 
@@ -2371,9 +2489,9 @@ private struct ImageJoinScreen: View {
             generatedLiveDraft = nil
         } catch NativeImageSourceLoader.LoadError.missingPairedVideo,
                 NativeImageSourceLoader.LoadError.resourceWriteFailed {
-            errorMessage = "这张 Live Photo 的动态部分暂时无法读取，请确认它已从 iCloud 下载完成。"
+            errorMessage = language.text(.liveResourceUnavailableSingle)
         } catch {
-            errorMessage = "这个素材暂时无法读取，请换一个试试。"
+            errorMessage = language.text(.unreadableMaterial)
         }
     }
 
@@ -2420,6 +2538,7 @@ private struct ImageJoinScreen: View {
 
         Task { @MainActor in
             defer { isGenerating = false }
+            try? await Task.sleep(nanoseconds: ImageGenerationFeedback.minimumVisibleNanoseconds)
 
             do {
                 if sources.contains(where: \.isLivePhoto) {
@@ -2447,7 +2566,7 @@ private struct ImageJoinScreen: View {
                 }
                 isResultPresented = true
             } catch {
-                errorMessage = sources.contains(where: \.isLivePhoto) ? "Live Photo 生成失败，请换一组素材试试。" : "图片生成失败，请重试。"
+                errorMessage = sources.contains(where: \.isLivePhoto) ? language.text(.imageJoinLiveFailed) : language.text(.imageJoinImageFailed)
             }
         }
     }
@@ -2460,6 +2579,8 @@ private struct ImageJoinScreen: View {
 }
 
 private struct SplitNineScreen: View {
+    @Environment(\.appLanguage) private var language
+
     @State private var pickerItem: PhotosPickerItem?
     @State private var sourceImage: UIImage?
     @State private var edit = NativeImageEdit.default
@@ -2471,18 +2592,18 @@ private struct SplitNineScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageTopBar(backLabel: "← 图片拼接") {
-                Badge(text: "图片切图", tone: .neutral)
+            PageTopBar(backLabel: language.text(.backImageCollage)) {
+                Badge(text: language.text(.splitNineBadge), tone: .neutral)
             }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("一图切九宫格")
+                        Text(language.text(.splitNineTitle))
                             .font(.system(size: 30, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                             .lineLimit(1)
-                        Text("选一张图，调好裁切后切成 9 张方图。")
+                        Text(language.text(.splitNineSubtitle))
                             .font(.system(size: 14))
                             .lineSpacing(4)
                             .foregroundStyle(AppTheme.muted)
@@ -2493,6 +2614,7 @@ private struct SplitNineScreen: View {
                             image: sourceImage,
                             edit: edit,
                             isDraggable: !(isLoading || isGenerating),
+                            loadingTitle: isGenerating ? ImageGenerationFeedback.splitNineTitle(language: language) : nil,
                             onDragEditChange: { newEdit in
                                 edit = newEdit
                                 generatedTiles = nil
@@ -2507,7 +2629,7 @@ private struct SplitNineScreen: View {
                     }
 
                     if isLoading {
-                        Text("正在读取图片…")
+                        Text(language.text(.loadingImage) + "...")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppTheme.muted)
                     }
@@ -2561,9 +2683,9 @@ private struct SplitNineScreen: View {
     }
 
     private var bottomActionTitle: String {
-        if sourceImage == nil { return "先选择图片" }
-        if isLoading { return "正在读取图片" }
-        return isGenerating ? "正在切图" : "生成 9 张图片"
+        if sourceImage == nil { return language.text(.chooseImagesFirst) }
+        if isLoading { return language.text(.loadingImage) }
+        return isGenerating ? language.text(.cutNine) : language.text(.generateNineImages)
     }
 
     @MainActor
@@ -2578,7 +2700,7 @@ private struct SplitNineScreen: View {
             edit = .default
             generatedTiles = nil
         } else {
-            errorMessage = "这张图片暂时无法读取，请换一张试试。"
+            errorMessage = language.text(.unreadableImage)
         }
 
         isLoading = false
@@ -2600,36 +2722,42 @@ private struct SplitNineScreen: View {
         guard let sourceImage else { return }
         isGenerating = true
         errorMessage = nil
-        defer { isGenerating = false }
 
-        do {
-            let tiles = try ImageCollageRenderer.splitNine(image: sourceImage, edit: edit)
-            generatedTiles = GeneratedTiles(tiles: tiles)
-            isResultPresented = true
-        } catch {
-            errorMessage = "九宫格生成失败，请重试。"
+        Task { @MainActor in
+            defer { isGenerating = false }
+            try? await Task.sleep(nanoseconds: ImageGenerationFeedback.minimumVisibleNanoseconds)
+
+            do {
+                let tiles = try ImageCollageRenderer.splitNine(image: sourceImage, edit: edit)
+                generatedTiles = GeneratedTiles(tiles: tiles)
+                isResultPresented = true
+            } catch {
+                errorMessage = language.text(.splitNineFailed)
+            }
         }
     }
 }
 
 private struct ImageResultScreen: View {
+    @Environment(\.appLanguage) private var language
+
     let image: UIImage
     let title: String
 
     @State private var isSaving = false
     @State private var didSave = false
-    @State private var status: String?
+    @State private var status: SaveStatusKind?
     @State private var isSaveError = false
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("图片已生成")
+                    Text(language.text(.imageResultTitle))
                         .font(.system(size: 30, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
                         .lineLimit(1)
-                    Text("预览确认无误后，保存到相册。")
+                    Text(language.text(.imageResultSubtitle))
                         .font(.footnote)
                         .foregroundStyle(AppTheme.muted)
 
@@ -2644,7 +2772,7 @@ private struct ImageResultScreen: View {
                         }
 
                     if let status {
-                        Text(status)
+                        Text(language.saveStatus(status))
                             .font(.footnote.weight(.medium))
                             .foregroundStyle(isSaveError ? AppTheme.error : (didSave ? AppTheme.primary : AppTheme.muted))
                     }
@@ -2654,9 +2782,10 @@ private struct ImageResultScreen: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 BottomActionBar(
                     title: PhotoResultPrimaryAction.title(
-                        saveTitle: "保存到相册",
+                        saveTitle: language.text(.saveToAlbum),
                         isSaving: isSaving,
-                        didSave: didSave
+                        didSave: didSave,
+                        language: language
                     ),
                     isDisabled: isSaving
                 ) {
@@ -2672,11 +2801,11 @@ private struct ImageResultScreen: View {
         }
         .background(Color.white)
         .toolbar(.visible, for: .navigationBar)
-        .navigationTitle("预览")
+        .navigationTitle(language.text(.preview))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Badge(text: "已生成", tone: .neutral)
+                Badge(text: language.text(.generated), tone: .neutral)
             }
         }
     }
@@ -2690,11 +2819,11 @@ private struct ImageResultScreen: View {
             try await PhotoSaver.save(image: image)
             didSave = true
             isSaveError = false
-            status = "已保存到相册，可直接打开相册查看。"
+            status = .saved
         } catch {
             didSave = false
             isSaveError = true
-            status = "保存失败，请检查相册权限后重试。"
+            status = .failed
         }
     }
 
@@ -2708,11 +2837,13 @@ private struct ImageResultScreen: View {
 }
 
 private struct SplitNineResultScreen: View {
+    @Environment(\.appLanguage) private var language
+
     let tiles: [UIImage]
 
     @State private var isSaving = false
     @State private var didSave = false
-    @State private var status: String?
+    @State private var status: SaveStatusKind?
     @State private var isSaveError = false
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
@@ -2720,7 +2851,7 @@ private struct SplitNineResultScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                Text("九宫格预览")
+                Text(language.text(.gridPreview))
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(AppTheme.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -2739,7 +2870,7 @@ private struct SplitNineResultScreen: View {
                 .padding(16)
 
                 if let status {
-                    Text(status)
+                    Text(language.saveStatus(status))
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(isSaveError ? AppTheme.error : (didSave ? AppTheme.primary : AppTheme.muted))
                         .padding(.horizontal, 16)
@@ -2748,9 +2879,10 @@ private struct SplitNineResultScreen: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 BottomActionBar(
                     title: PhotoResultPrimaryAction.title(
-                        saveTitle: "保存全部到相册",
+                        saveTitle: language.text(.saveAllToAlbum),
                         isSaving: isSaving,
-                        didSave: didSave
+                        didSave: didSave,
+                        language: language
                     ),
                     isDisabled: isSaving
                 ) {
@@ -2766,11 +2898,11 @@ private struct SplitNineResultScreen: View {
         }
         .background(Color.white)
         .toolbar(.visible, for: .navigationBar)
-        .navigationTitle("预览")
+        .navigationTitle(language.text(.preview))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Badge(text: "已生成", tone: .neutral)
+                Badge(text: language.text(.generated), tone: .neutral)
             }
         }
     }
@@ -2786,11 +2918,11 @@ private struct SplitNineResultScreen: View {
             }
             didSave = true
             isSaveError = false
-            status = "已保存 9 张图片，可直接打开相册查看。"
+            status = .savedTiles
         } catch {
             didSave = false
             isSaveError = true
-            status = "保存失败，请检查相册权限后重试。"
+            status = .failed
         }
     }
 
@@ -2804,21 +2936,23 @@ private struct SplitNineResultScreen: View {
 }
 
 private struct TemplatePreviewCard: View {
+    @Environment(\.appLanguage) private var language
+
     let template: NativeCollageTemplate
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("模板预览")
+                    Text(language.text(.templatePreview))
                         .font(.caption)
                         .foregroundStyle(AppTheme.muted)
-                    Text(template.name)
+                    Text(template.localizedName(language))
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(AppTheme.ink)
                 }
                 Spacer()
-                Text("\(template.slots.count) 段")
+                Text(language.clipCount(template.slots.count))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(AppTheme.primary)
                     .padding(.horizontal, 9)
@@ -2947,6 +3081,8 @@ private struct ImageEditDragModifier: ViewModifier {
 }
 
 private struct ImageJoinEmptyPicker: View {
+    @Environment(\.appLanguage) private var language
+
     let mode: ImageJoinMode
 
     var body: some View {
@@ -2983,10 +3119,10 @@ private struct ImageJoinEmptyPicker: View {
                     .foregroundStyle(Color.white)
                     .frame(width: 48, height: 48)
                     .background(AppTheme.primary, in: Circle())
-                Text("选择图片")
+                Text(language.text(.chooseImages))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppTheme.ink)
-                Text("可多选，最多 9 张")
+                Text(language.text(.multiSelectHint))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppTheme.muted)
             }
@@ -3009,6 +3145,7 @@ private struct ImageJoinCanvas: View {
     let mode: ImageJoinMode
     let activeIndex: Int
     let isLoading: Bool
+    var loadingTitle: String? = nil
     let onEditChange: (Int, NativeImageEdit) -> Void
     let onSelect: (Int) -> Void
 
@@ -3073,6 +3210,12 @@ private struct ImageJoinCanvas: View {
                 }
                 .frame(width: innerSize(for: proxy.size).width, height: innerSize(for: proxy.size).height)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                if let loadingTitle {
+                    GenerationLoadingOverlay(title: loadingTitle)
+                        .padding(panelPadding)
+                        .transition(.opacity)
+                }
             }
         }
         .aspectRatio(1, contentMode: .fit)
@@ -3185,8 +3328,10 @@ private struct ImageJoinThumbnailRail: View {
 }
 
 private struct LiveSourceBadge: View {
+    @Environment(\.appLanguage) private var language
+
     var body: some View {
-        Text("LIVE")
+        Text(language.text(.liveBadge))
             .font(.system(size: 9, weight: .bold))
             .foregroundStyle(Color.white)
             .padding(.horizontal, 5)
@@ -3196,6 +3341,8 @@ private struct LiveSourceBadge: View {
 }
 
 private struct ImageJoinEditPanel: View {
+    @Environment(\.appLanguage) private var language
+
     let mode: ImageJoinMode
     let activeIndex: Int
     let sourceCount: Int
@@ -3215,13 +3362,13 @@ private struct ImageJoinEditPanel: View {
         VStack(alignment: .leading, spacing: 15) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(mode.title)
+                    Text(mode.localizedTitle(language))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppTheme.primary)
-                    Text("编辑第 \(activeIndex + 1) 张")
+                    Text(language.editingImage(activeIndex))
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
-                    Text("\(sourceCount) 个素材 · 输出 \(Int(outputSize.width)) × \(Int(outputSize.height))")
+                    Text(language.imageOutputSummary(sourceCount: sourceCount, width: Int(outputSize.width), height: Int(outputSize.height)))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppTheme.muted)
                 }
@@ -3230,7 +3377,7 @@ private struct ImageJoinEditPanel: View {
 
                 HStack(spacing: 8) {
                     PhotosPicker(selection: $replacementPickerItem, matching: .any(of: [.images, .livePhotos]), preferredItemEncoding: .current) {
-                        Text("替换")
+                        Text(language.text(.replace))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                             .frame(height: 36)
@@ -3245,7 +3392,7 @@ private struct ImageJoinEditPanel: View {
                     .disabled(controlsDisabled)
 
                     Button(action: onDelete) {
-                        Text("删除")
+                        Text(language.text(.delete))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(AppTheme.error)
                             .frame(height: 36)
@@ -3259,7 +3406,7 @@ private struct ImageJoinEditPanel: View {
 
             VStack(spacing: 14) {
                 SliderControl(
-                    title: "缩放",
+                    title: language.text(.zoom),
                     valueText: String(format: "%.1fx", edit.zoom),
                     value: Double(edit.zoom),
                     range: 1...3,
@@ -3271,7 +3418,7 @@ private struct ImageJoinEditPanel: View {
 
                 HStack(spacing: 12) {
                     SliderControl(
-                        title: "水平",
+                        title: language.text(.horizontal),
                         valueText: "\(Int(edit.focalX * 100))%",
                         value: Double(edit.focalX),
                         range: 0...1,
@@ -3282,7 +3429,7 @@ private struct ImageJoinEditPanel: View {
                     }
 
                     SliderControl(
-                        title: "垂直",
+                        title: language.text(.vertical),
                         valueText: "\(Int(edit.focalY * 100))%",
                         value: Double(edit.focalY),
                         range: 0...1,
@@ -3304,9 +3451,12 @@ private struct ImageJoinEditPanel: View {
 }
 
 private struct SplitNinePickerPreview: View {
+    @Environment(\.appLanguage) private var language
+
     let image: UIImage?
     let edit: NativeImageEdit
     var isDraggable = false
+    var loadingTitle: String? = nil
     var onDragEditChange: (NativeImageEdit) -> Void = { _ in }
 
     private let panelPadding: CGFloat = 6
@@ -3338,10 +3488,10 @@ private struct SplitNinePickerPreview: View {
                                 .foregroundStyle(Color.white)
                                 .frame(width: 48, height: 48)
                                 .background(AppTheme.primary, in: Circle())
-                            Text("选择图片")
+                            Text(language.text(.chooseImages))
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(AppTheme.ink)
-                            Text("建议使用高清原图")
+                            Text(language.text(.highResHint))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(AppTheme.muted)
                         }
@@ -3352,6 +3502,12 @@ private struct SplitNinePickerPreview: View {
                 }
                 .frame(width: innerSize(for: proxy.size).width, height: innerSize(for: proxy.size).height)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                if let loadingTitle {
+                    GenerationLoadingOverlay(title: loadingTitle)
+                        .padding(panelPadding)
+                        .transition(.opacity)
+                }
             }
         }
         .aspectRatio(1, contentMode: .fit)
@@ -3372,6 +3528,8 @@ private struct SplitNinePickerPreview: View {
 }
 
 private struct SplitNineEditPanel: View {
+    @Environment(\.appLanguage) private var language
+
     let hasImage: Bool
     let edit: NativeImageEdit
     let isDisabled: Bool
@@ -3385,13 +3543,13 @@ private struct SplitNineEditPanel: View {
         VStack(alignment: .leading, spacing: 15) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("九宫格切图")
+                    Text(language.text(.splitNinePanelTitle))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppTheme.primary)
-                    Text(hasImage ? "已选择图片" : "选择一张图片")
+                    Text(hasImage ? language.text(.imageSelected) : language.text(.chooseOneImage))
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
-                    Text(hasImage ? "可调整裁切位置和缩放" : "上传后可预览九宫格切分")
+                    Text(hasImage ? language.text(.cropAdjustHint) : language.text(.splitPreviewHint))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppTheme.muted)
                 }
@@ -3399,7 +3557,7 @@ private struct SplitNineEditPanel: View {
                 Spacer()
 
                 PhotosPicker(selection: $pickerItem, matching: .images) {
-                    Text(hasImage ? "替换" : "选择")
+                    Text(hasImage ? language.text(.replace) : language.text(.choose))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
                         .frame(height: 36)
@@ -3416,7 +3574,7 @@ private struct SplitNineEditPanel: View {
 
             VStack(spacing: 14) {
                 SliderControl(
-                    title: "缩放",
+                    title: language.text(.zoom),
                     valueText: String(format: "%.1fx", edit.zoom),
                     value: Double(edit.zoom),
                     range: 1...3,
@@ -3428,7 +3586,7 @@ private struct SplitNineEditPanel: View {
 
                 HStack(spacing: 12) {
                     SliderControl(
-                        title: "水平",
+                        title: language.text(.horizontal),
                         valueText: "\(Int(edit.focalX * 100))%",
                         value: Double(edit.focalX),
                         range: 0...1,
@@ -3439,7 +3597,7 @@ private struct SplitNineEditPanel: View {
                     }
 
                     SliderControl(
-                        title: "垂直",
+                        title: language.text(.vertical),
                         valueText: "\(Int(edit.focalY * 100))%",
                         value: Double(edit.focalY),
                         range: 0...1,
@@ -3494,6 +3652,9 @@ private struct BottomActionBar: View {
                 Text(title)
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(isDisabled ? AppTheme.faint : Color.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+                    .padding(.horizontal, 12)
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
                     .background(isDisabled ? AppTheme.raised : AppTheme.primary, in: RoundedRectangle(cornerRadius: 12))
@@ -3505,6 +3666,35 @@ private struct BottomActionBar: View {
             .padding(.bottom, 10)
         }
         .background(.regularMaterial)
+    }
+}
+
+private struct GenerationLoadingOverlay: View {
+    let title: String
+
+    var body: some View {
+        ZStack {
+            Color.white.opacity(0.68)
+
+            HStack(spacing: 10) {
+                ProgressView()
+                    .tint(AppTheme.primary)
+
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            }
+        }
+        .allowsHitTesting(true)
     }
 }
 
@@ -3566,22 +3756,21 @@ private enum PhotoLibraryOpener {
     ]
 
     @MainActor
-    static func open(onStatusChange: @escaping @MainActor (String) -> Void) {
-        onStatusChange("正在打开相册...")
+    static func open(onStatusChange: @escaping @MainActor (SaveStatusKind) -> Void) {
         openURL(at: 0, onStatusChange: onStatusChange)
     }
 
     @MainActor
-    private static func openURL(at index: Int, onStatusChange: @escaping @MainActor (String) -> Void) {
+    private static func openURL(at index: Int, onStatusChange: @escaping @MainActor (SaveStatusKind) -> Void) {
         guard index < urls.count else {
-            onStatusChange("已保存，请到相册中查看。")
+            onStatusChange(.openPhotosFailed)
             return
         }
 
         UIApplication.shared.open(urls[index], options: [:]) { success in
             Task { @MainActor in
                 if success {
-                    onStatusChange("已打开相册。")
+                    onStatusChange(.openedPhotos)
                 } else {
                     openURL(at: index + 1, onStatusChange: onStatusChange)
                 }

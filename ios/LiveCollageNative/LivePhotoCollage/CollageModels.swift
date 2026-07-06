@@ -1,6 +1,487 @@
 import CoreGraphics
 import Foundation
 
+enum AppLanguage: String, CaseIterable, Hashable {
+    case zhHans = "zh-Hans"
+    case en = "en"
+
+    static var preferred: AppLanguage {
+        let preferredIdentifier = Locale.preferredLanguages.first ?? ""
+        return preferredIdentifier.lowercased().hasPrefix("zh") ? .zhHans : .en
+    }
+
+    var next: AppLanguage {
+        self == .zhHans ? .en : .zhHans
+    }
+
+    var toggleTitle: String {
+        self == .zhHans ? "EN" : "中"
+    }
+
+    var localeIdentifier: String {
+        rawValue
+    }
+
+    func text(_ key: AppText) -> String {
+        AppStrings.text(key, language: self)
+    }
+
+    func templateCount(_ count: Int) -> String {
+        self == .zhHans ? "\(count) 个模板" : "\(count) templates"
+    }
+
+    func clipCount(_ count: Int) -> String {
+        if self == .zhHans { return "\(count) 段" }
+        return count == 1 ? "1 clip" : "\(count) clips"
+    }
+
+    func materialCount(_ count: Int) -> String {
+        if self == .zhHans { return "\(count) 个素材" }
+        return count == 1 ? "1 item" : "\(count) items"
+    }
+
+    func maxImages(_ count: Int) -> String {
+        self == .zhHans ? "最多 \(count) 张" : "Up to \(count)"
+    }
+
+    func videoSlot(_ index: Int) -> String {
+        self == .zhHans ? "视频 \(index + 1)" : "Video \(index + 1)"
+    }
+
+    func addVideo(_ index: Int) -> String {
+        self == .zhHans ? "添加视频 \(index + 1)" : "Add video \(index + 1)"
+    }
+
+    func missingVideos(_ count: Int) -> String {
+        if self == .zhHans { return "还差 \(count) 段视频" }
+        return count == 1 ? "1 video missing" : "\(count) videos missing"
+    }
+
+    func loadingVideos(_ count: Int) -> String {
+        if self == .zhHans { return "正在读取 \(count) 段视频..." }
+        return count == 1 ? "Loading 1 video..." : "Loading \(count) videos..."
+    }
+
+    func selectedVideos(_ count: Int) -> String {
+        if self == .zhHans { return "已选择 \(count) 段视频。" }
+        return count == 1 ? "1 video selected." : "\(count) videos selected."
+    }
+
+    func unreadableVideo(_ index: Int) -> String {
+        self == .zhHans ? "视频 \(index + 1) 暂时无法读取，请换一个视频。" : "Video \(index + 1) cannot be read. Try another video."
+    }
+
+    func liveEditorKicker(template: NativeCollageTemplate) -> String {
+        if self == .zhHans {
+            return "\(template.localizedName(self))模板 · \(clipCount(template.slots.count))素材"
+        }
+        return "\(template.localizedName(self)) · \(clipCount(template.slots.count))"
+    }
+
+    func exportRange(start: Double, end: Double, filledCount: Int, totalCount: Int) -> String {
+        let startValue = String(format: "%.2fs", start)
+        let endValue = String(format: "%.2fs", end)
+        if self == .zhHans {
+            return "导出片段 \(startValue) - \(endValue) · \(filledCount)/\(totalCount) 段"
+        }
+        return "Export \(startValue) - \(endValue) · \(filledCount)/\(totalCount)"
+    }
+
+    func materialProgress(filledCount: Int, totalCount: Int) -> String {
+        if self == .zhHans {
+            return "\(filledCount)/\(totalCount) 段素材"
+        }
+        return "\(filledCount)/\(totalCount) selected"
+    }
+
+    func editingImage(_ index: Int) -> String {
+        self == .zhHans ? "编辑第 \(index + 1) 张" : "Edit image \(index + 1)"
+    }
+
+    func imageOutputSummary(sourceCount: Int, width: Int, height: Int) -> String {
+        if self == .zhHans {
+            return "\(sourceCount) 个素材 · 输出 \(width) × \(height)"
+        }
+        return "\(sourceCount) items · \(width) × \(height)"
+    }
+
+    func maxImagesExceeded(_ count: Int) -> String {
+        self == .zhHans ? "最多只能选择 \(count) 张图片。" : "You can select up to \(count) images."
+    }
+
+    func maxMaterialsKept(_ count: Int) -> String {
+        if self == .zhHans { return "最多 \(count) 个素材，已保留前 \(count) 个。" }
+        return "Kept the first \(count) items."
+    }
+
+    func saveStatus(_ kind: SaveStatusKind) -> String {
+        switch kind {
+        case .saved:
+            return text(.saveStatusSaved)
+        case .savedTiles:
+            return text(.saveStatusSavedTiles)
+        case .failed:
+            return text(.saveStatusFailed)
+        case .openedPhotos:
+            return text(.saveStatusOpenedPhotos)
+        case .openPhotosFailed:
+            return text(.saveStatusOpenPhotosFailed)
+        }
+    }
+}
+
+enum SaveStatusKind: Hashable {
+    case saved
+    case savedTiles
+    case failed
+    case openedPhotos
+    case openPhotosFailed
+}
+
+enum AppText: String, CaseIterable {
+    case splashTagline
+    case homeTitle
+    case homeSubtitle
+    case homeTopTagline
+    case start
+    case liveEntryTitle
+    case liveEntrySubtitle
+    case imageEntryTitle
+    case imageEntrySubtitle
+    case horizontalShort
+    case verticalShort
+    case gridShort
+    case capabilityTemplates
+    case capabilityTemplatesDetail
+    case capabilityCanvas
+    case capabilityCanvasDetail
+    case capabilityAlbum
+    case capabilityAlbumDetail
+    case feedback
+    case backHome
+    case backTemplate
+    case backImageCollage
+    case templatesTitle
+    case templatesSubtitle
+    case localOnlyMessage
+    case fillVideosTitle
+    case fillVideosSubtitle
+    case generating
+    case loadingVideo
+    case generateLivePhoto
+    case loading
+    case dragToAdjust
+    case loadingShort
+    case notSelected
+    case currentSlot
+    case displayMode
+    case fitFill
+    case fitFull
+    case zoom
+    case horizontal
+    case vertical
+    case clipDuration
+    case startTime
+    case choose
+    case replace
+    case delete
+    case liveReadyMessage
+    case selectedAllMessage
+    case needAllVideos
+    case composingLive
+    case liveGeneratedMessage
+    case liveGenerationFailed
+    case liveResultTitle
+    case liveResultSubtitle
+    case generated
+    case preview
+    case saveAsLivePhoto
+    case saving
+    case openPhotos
+    case imageMode
+    case imageToolsTitle
+    case imageToolsSubtitle
+    case imageToolHorizontalTitle
+    case imageToolHorizontalDetail
+    case imageToolVerticalTitle
+    case imageToolVerticalDetail
+    case imageToolGridTitle
+    case imageToolGridDetail
+    case imageJoinSubtitle
+    case chooseImagesFirst
+    case loadingMaterials
+    case generatingImage
+    case generateImage
+    case liveResourceUnavailablePlural
+    case liveResourceUnavailableSingle
+    case unreadableMaterials
+    case unreadableMaterial
+    case imageJoinLiveFailed
+    case imageJoinImageFailed
+    case splitNineBadge
+    case splitNineTitle
+    case splitNineSubtitle
+    case loadingImage
+    case splittingImage
+    case cutNine
+    case generateNineImages
+    case unreadableImage
+    case splitNineFailed
+    case imageResultTitle
+    case imageResultSubtitle
+    case saveToAlbum
+    case saveAllToAlbum
+    case gridPreview
+    case templatePreview
+    case chooseImages
+    case multiSelectHint
+    case liveBadge
+    case highResHint
+    case splitNinePanelTitle
+    case imageSelected
+    case chooseOneImage
+    case cropAdjustHint
+    case splitPreviewHint
+    case saveStatusSaved
+    case saveStatusSavedTiles
+    case saveStatusFailed
+    case saveStatusOpenedPhotos
+    case saveStatusOpenPhotosFailed
+}
+
+enum AppStrings {
+    private static let zhHans: [AppText: String] = [
+        .splashTagline: "几段视频，一张 Live Photo",
+        .homeTitle: "选择一种拼接方式？",
+        .homeSubtitle: "选中入口，即刻开始。",
+        .homeTopTagline: "把精彩，拼成一张 Live。",
+        .start: "开始",
+        .liveEntryTitle: "Video → Live",
+        .liveEntrySubtitle: "多段视频，生成一张 Live Photo。",
+        .imageEntryTitle: "图片拼接",
+        .imageEntrySubtitle: "支持图片、Live Photo 自由拼接。",
+        .horizontalShort: "左右",
+        .verticalShort: "上下",
+        .gridShort: "九宫格",
+        .capabilityTemplates: "模板",
+        .capabilityTemplatesDetail: "丰富布局",
+        .capabilityCanvas: "画面",
+        .capabilityCanvasDetail: "自由拖拽",
+        .capabilityAlbum: "相册",
+        .capabilityAlbumDetail: "直接保存",
+        .feedback: "问题反馈",
+        .backHome: "← 首页",
+        .backTemplate: "← 换模板",
+        .backImageCollage: "← 图片拼接",
+        .templatesTitle: "选择模板",
+        .templatesSubtitle: "先选画面结构，再放视频。",
+        .localOnlyMessage: "当前版本会在本机合成，不上传服务端。",
+        .fillVideosTitle: "填入视频并调整画面",
+        .fillVideosSubtitle: "一次选择素材，选中槽位后调整画面和片段。",
+        .generating: "正在生成",
+        .loadingVideo: "正在读取视频",
+        .generateLivePhoto: "生成 Live Photo",
+        .loading: "正在读取",
+        .dragToAdjust: "拖动调整",
+        .loadingShort: "读取中",
+        .notSelected: "未选择",
+        .currentSlot: "当前槽位",
+        .displayMode: "显示方式",
+        .fitFill: "填满裁切",
+        .fitFull: "完整展示",
+        .zoom: "缩放",
+        .horizontal: "水平",
+        .vertical: "垂直",
+        .clipDuration: "片段时长",
+        .startTime: "起始时间",
+        .choose: "选择",
+        .replace: "替换",
+        .delete: "删除",
+        .liveReadyMessage: "素材已就绪，可以继续调整。",
+        .selectedAllMessage: "素材已就绪，可以继续调整。",
+        .needAllVideos: "请先选满当前模板需要的视频。",
+        .composingLive: "正在本机合成 Live Photo...",
+        .liveGeneratedMessage: "Live Photo 已生成，可以保存到相册。",
+        .liveGenerationFailed: "生成失败，请换一组视频试试。",
+        .liveResultTitle: "Live Photo 已生成",
+        .liveResultSubtitle: "长按预览动态效果，确认无误后保存到相册。",
+        .generated: "已生成",
+        .preview: "预览",
+        .saveAsLivePhoto: "保存为 Live Photo",
+        .saving: "正在保存",
+        .openPhotos: "打开相册查看",
+        .imageMode: "图片模式",
+        .imageToolsTitle: "图片拼接",
+        .imageToolsSubtitle: "左右、上下，或者把一张图切成九宫格。",
+        .imageToolHorizontalTitle: "左右拼接",
+        .imageToolHorizontalDetail: "图片或 Live 横向合成一张。",
+        .imageToolVerticalTitle: "上下拼接",
+        .imageToolVerticalDetail: "图片或 Live 纵向合成一张。",
+        .imageToolGridTitle: "一图切九宫格",
+        .imageToolGridDetail: "一张图切成 9 张。",
+        .imageJoinSubtitle: "多选图片或 Live Photo，在一张图里按方向等分拼好。",
+        .chooseImagesFirst: "先选择图片",
+        .loadingMaterials: "正在读取素材",
+        .generatingImage: "正在生成图片...",
+        .generateImage: "生成图片",
+        .liveResourceUnavailablePlural: "有 Live Photo 的动态部分暂时无法读取，请换一张或确认它已从 iCloud 下载完成。",
+        .liveResourceUnavailableSingle: "这张 Live Photo 的动态部分暂时无法读取，请确认它已从 iCloud 下载完成。",
+        .unreadableMaterials: "这些素材暂时无法读取，请换一组试试。",
+        .unreadableMaterial: "这个素材暂时无法读取，请换一个试试。",
+        .imageJoinLiveFailed: "Live Photo 生成失败，请换一组素材试试。",
+        .imageJoinImageFailed: "图片生成失败，请重试。",
+        .splitNineBadge: "图片切图",
+        .splitNineTitle: "一图切九宫格",
+        .splitNineSubtitle: "选一张图，调好裁切后切成 9 张方图。",
+        .loadingImage: "正在读取图片",
+        .splittingImage: "正在切图...",
+        .cutNine: "正在切图",
+        .generateNineImages: "生成 9 张图片",
+        .unreadableImage: "这张图片暂时无法读取，请换一张试试。",
+        .splitNineFailed: "九宫格生成失败，请重试。",
+        .imageResultTitle: "图片已生成",
+        .imageResultSubtitle: "预览确认无误后，保存到相册。",
+        .saveToAlbum: "保存到相册",
+        .saveAllToAlbum: "保存全部到相册",
+        .gridPreview: "九宫格预览",
+        .templatePreview: "模板预览",
+        .chooseImages: "选择图片",
+        .multiSelectHint: "可多选，最多 9 张",
+        .liveBadge: "LIVE",
+        .highResHint: "建议使用高清原图",
+        .splitNinePanelTitle: "九宫格切图",
+        .imageSelected: "已选择图片",
+        .chooseOneImage: "选择一张图片",
+        .cropAdjustHint: "可调整裁切位置和缩放",
+        .splitPreviewHint: "上传后可预览九宫格切分",
+        .saveStatusSaved: "已保存到相册，可直接打开相册查看。",
+        .saveStatusSavedTiles: "已保存 9 张图片，可直接打开相册查看。",
+        .saveStatusFailed: "保存失败，请检查相册权限后重试。",
+        .saveStatusOpenedPhotos: "已打开相册。",
+        .saveStatusOpenPhotosFailed: "已保存，请到相册中查看。",
+    ]
+
+    private static let en: [AppText: String] = [
+        .splashTagline: "Clips into one Live Photo",
+        .homeTitle: "Choose a collage mode",
+        .homeSubtitle: "Pick a workflow and start.",
+        .homeTopTagline: "Turn moments into one Live.",
+        .start: "Start",
+        .liveEntryTitle: "Video → Live",
+        .liveEntrySubtitle: "Combine videos into one Live Photo.",
+        .imageEntryTitle: "Image Collage",
+        .imageEntrySubtitle: "Join images and Live Photos freely.",
+        .horizontalShort: "Side",
+        .verticalShort: "Stack",
+        .gridShort: "9-grid",
+        .capabilityTemplates: "Layouts",
+        .capabilityTemplatesDetail: "Ready grids",
+        .capabilityCanvas: "Canvas",
+        .capabilityCanvasDetail: "Drag & zoom",
+        .capabilityAlbum: "Photos",
+        .capabilityAlbumDetail: "Save direct",
+        .feedback: "Feedback",
+        .backHome: "← Home",
+        .backTemplate: "← Templates",
+        .backImageCollage: "← Images",
+        .templatesTitle: "Choose Layout",
+        .templatesSubtitle: "Pick a structure, then add videos.",
+        .localOnlyMessage: "Everything is processed on this iPhone.",
+        .fillVideosTitle: "Add videos and adjust",
+        .fillVideosSubtitle: "Select clips once, then tune each slot.",
+        .generating: "Generating",
+        .loadingVideo: "Loading video",
+        .generateLivePhoto: "Generate Live Photo",
+        .loading: "Loading",
+        .dragToAdjust: "Drag to adjust",
+        .loadingShort: "Loading",
+        .notSelected: "Empty",
+        .currentSlot: "Current slot",
+        .displayMode: "Display",
+        .fitFill: "Fill",
+        .fitFull: "Fit",
+        .zoom: "Zoom",
+        .horizontal: "Horizontal",
+        .vertical: "Vertical",
+        .clipDuration: "Duration",
+        .startTime: "Start",
+        .choose: "Choose",
+        .replace: "Replace",
+        .delete: "Delete",
+        .liveReadyMessage: "Clips are ready. Adjust as needed.",
+        .selectedAllMessage: "Clips are ready. Adjust as needed.",
+        .needAllVideos: "Add all videos required by this layout first.",
+        .composingLive: "Generating Live Photo on device...",
+        .liveGeneratedMessage: "Live Photo is ready to save.",
+        .liveGenerationFailed: "Generation failed. Try another set of videos.",
+        .liveResultTitle: "Live Photo Ready",
+        .liveResultSubtitle: "Press and hold to preview, then save to Photos.",
+        .generated: "Ready",
+        .preview: "Preview",
+        .saveAsLivePhoto: "Save Live Photo",
+        .saving: "Saving",
+        .openPhotos: "Open Photos",
+        .imageMode: "Images",
+        .imageToolsTitle: "Image Collage",
+        .imageToolsSubtitle: "Join side by side, stack, or split into 9.",
+        .imageToolHorizontalTitle: "Side by Side",
+        .imageToolHorizontalDetail: "Join images or Live Photos horizontally.",
+        .imageToolVerticalTitle: "Stacked",
+        .imageToolVerticalDetail: "Join images or Live Photos vertically.",
+        .imageToolGridTitle: "Split into 9",
+        .imageToolGridDetail: "Cut one image into 9 square tiles.",
+        .imageJoinSubtitle: "Select images or Live Photos and split one canvas evenly.",
+        .chooseImagesFirst: "Choose images first",
+        .loadingMaterials: "Loading items",
+        .generatingImage: "Generating image...",
+        .generateImage: "Generate Image",
+        .liveResourceUnavailablePlural: "A Live Photo motion resource could not be read. Try another item or download it from iCloud first.",
+        .liveResourceUnavailableSingle: "This Live Photo motion resource could not be read. Make sure it is downloaded from iCloud.",
+        .unreadableMaterials: "These items cannot be read. Try another set.",
+        .unreadableMaterial: "This item cannot be read. Try another one.",
+        .imageJoinLiveFailed: "Live Photo generation failed. Try another set.",
+        .imageJoinImageFailed: "Image generation failed. Please try again.",
+        .splitNineBadge: "Split",
+        .splitNineTitle: "Split into 9",
+        .splitNineSubtitle: "Choose one image, adjust the crop, then export 9 tiles.",
+        .loadingImage: "Loading image",
+        .splittingImage: "Splitting image...",
+        .cutNine: "Splitting",
+        .generateNineImages: "Generate 9 Images",
+        .unreadableImage: "This image cannot be read. Try another one.",
+        .splitNineFailed: "9-grid generation failed. Please try again.",
+        .imageResultTitle: "Image Ready",
+        .imageResultSubtitle: "Preview it, then save to Photos.",
+        .saveToAlbum: "Save to Photos",
+        .saveAllToAlbum: "Save All to Photos",
+        .gridPreview: "9-grid Preview",
+        .templatePreview: "Layout Preview",
+        .chooseImages: "Choose Images",
+        .multiSelectHint: "Select up to 9 items",
+        .liveBadge: "LIVE",
+        .highResHint: "Use a high-resolution image",
+        .splitNinePanelTitle: "9-grid Split",
+        .imageSelected: "Image selected",
+        .chooseOneImage: "Choose an image",
+        .cropAdjustHint: "Adjust crop and zoom",
+        .splitPreviewHint: "Preview the 9-grid after upload",
+        .saveStatusSaved: "Saved to Photos. You can open Photos now.",
+        .saveStatusSavedTiles: "Saved 9 images to Photos. You can open Photos now.",
+        .saveStatusFailed: "Save failed. Check Photos permission and try again.",
+        .saveStatusOpenedPhotos: "Photos opened.",
+        .saveStatusOpenPhotosFailed: "Saved. Please check it in Photos.",
+    ]
+
+    static func text(_ key: AppText, language: AppLanguage) -> String {
+        switch language {
+        case .zhHans:
+            return zhHans[key] ?? key.rawValue
+        case .en:
+            return en[key] ?? zhHans[key] ?? key.rawValue
+        }
+    }
+}
+
 struct CollageSlot: Hashable, Identifiable {
     let id: Int
     let x: CGFloat
@@ -80,6 +561,44 @@ struct NativeCollageTemplate: Hashable, Identifiable {
             ]
         ),
     ]
+
+    func localizedName(_ language: AppLanguage) -> String {
+        switch id {
+        case "left-right":
+            return language == .zhHans ? "左右" : "Side by Side"
+        case "top-bottom":
+            return language == .zhHans ? "上下" : "Stacked"
+        case "three-columns":
+            return language == .zhHans ? "三列" : "Three Columns"
+        case "three-rows":
+            return language == .zhHans ? "三行" : "Three Rows"
+        case "grid-2x2":
+            return language == .zhHans ? "四宫格" : "2 x 2 Grid"
+        case "one-big-two-small":
+            return language == .zhHans ? "一大两小" : "Hero + Two"
+        default:
+            return name
+        }
+    }
+
+    func localizedDetail(_ language: AppLanguage) -> String {
+        switch id {
+        case "left-right":
+            return language == .zhHans ? "两段并排" : "Two clips side by side"
+        case "top-bottom":
+            return language == .zhHans ? "两段叠放" : "Two clips stacked"
+        case "three-columns":
+            return language == .zhHans ? "三段横排" : "Three vertical columns"
+        case "three-rows":
+            return language == .zhHans ? "三段竖排" : "Three horizontal rows"
+        case "grid-2x2":
+            return language == .zhHans ? "四段网格" : "Four clip grid"
+        case "one-big-two-small":
+            return language == .zhHans ? "主画面加两个小画面" : "One hero clip with two smaller clips"
+        default:
+            return detail
+        }
+    }
 }
 
 enum NativeFitMode: String, Hashable {
@@ -179,16 +698,28 @@ enum NativeSliderBounds {
 }
 
 enum LiveResultPrimaryAction {
-    static func title(isSaving: Bool, didSave: Bool) -> String {
-        if isSaving { return "正在保存" }
-        return didSave ? "打开相册查看" : "保存为 Live Photo"
+    static func title(isSaving: Bool, didSave: Bool, language: AppLanguage = .zhHans) -> String {
+        if isSaving { return language.text(.saving) }
+        return didSave ? language.text(.openPhotos) : language.text(.saveAsLivePhoto)
     }
 }
 
 enum PhotoResultPrimaryAction {
-    static func title(saveTitle: String, isSaving: Bool, didSave: Bool) -> String {
-        if isSaving { return "正在保存" }
-        return didSave ? "打开相册查看" : saveTitle
+    static func title(saveTitle: String, isSaving: Bool, didSave: Bool, language: AppLanguage = .zhHans) -> String {
+        if isSaving { return language.text(.saving) }
+        return didSave ? language.text(.openPhotos) : saveTitle
+    }
+}
+
+enum ImageGenerationFeedback {
+    static let minimumVisibleNanoseconds: UInt64 = 180_000_000
+
+    static func imageJoinTitle(language: AppLanguage) -> String {
+        language.text(.generatingImage)
+    }
+
+    static func splitNineTitle(language: AppLanguage) -> String {
+        language.text(.splittingImage)
     }
 }
 
@@ -321,6 +852,15 @@ enum ImageJoinMode: String, CaseIterable, Identifiable {
             return "左右拼接"
         case .vertical:
             return "上下拼接"
+        }
+    }
+
+    func localizedTitle(_ language: AppLanguage) -> String {
+        switch self {
+        case .horizontal:
+            return language == .zhHans ? "左右拼接" : "Side by Side"
+        case .vertical:
+            return language == .zhHans ? "上下拼接" : "Stacked"
         }
     }
 }

@@ -1,0 +1,2 @@
+"NSPhotoLibraryAddUsageDescription" = "需要保存生成的 Live Photo、拼接图片和九宫格切图到你的相册。";
+"NSPhotoLibraryUsageDescription" = "需要从相册选择视频和图片，用于本地生成 Live Photo 或拼接图片。";

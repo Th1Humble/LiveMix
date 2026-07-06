@@ -23,9 +23,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>需要保存生成的 Live Photo、拼接图片和九宫格切图到你的相册。</string>
+	<string>LiveMix needs access to save generated Live Photos, collages, and 9-grid images to your Photos library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>需要从相册选择视频和图片，用于本地生成 Live Photo 或拼接图片。</string>
+	<string>LiveMix needs access to selected photos and videos to create Live Photos and collages on this device.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

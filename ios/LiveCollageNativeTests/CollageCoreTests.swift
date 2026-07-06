@@ -18,6 +18,8 @@ struct CollageCoreTests {
         testImageJoinOutputUsesSingleCanvas()
         testImageJoinLiveTemplateMatchesImageJoinLayout()
         testSplitNineProducesNineTiles()
+        testAppLanguageTranslationsAndToggle()
+        testImageGenerationLoadingCopy()
         print("CollageCoreTests passed")
     }
 
@@ -208,6 +210,25 @@ struct CollageCoreTests {
         expect(tiles.count == 9, "split-nine should produce exactly 9 tiles")
         expect(tiles.first == CGRect(x: 0, y: 0, width: 1080, height: 1080), "first tile should start at top-left")
         expect(tiles.last == CGRect(x: 2160, y: 2160, width: 1080, height: 1080), "last tile should end at bottom-right")
+    }
+
+    private static func testAppLanguageTranslationsAndToggle() {
+        expect(AppLanguage.zhHans.text(.homeTitle) == "选择一种拼接方式？", "Chinese home title should stay localized")
+        expect(AppLanguage.en.text(.homeTitle) == "Choose a collage mode", "English home title should be available")
+        expect(AppLanguage.zhHans.next == .en, "Chinese toggle should switch to English")
+        expect(AppLanguage.en.next == .zhHans, "English toggle should switch to Chinese")
+
+        let template = NativeCollageTemplate.liveTemplates.first { $0.id == "left-right" }!
+        expect(template.localizedName(.en) == "Side by Side", "template names should localize to English")
+        expect(ImageJoinMode.vertical.localizedTitle(.en) == "Stacked", "image join mode should localize to English")
+    }
+
+    private static func testImageGenerationLoadingCopy() {
+        expect(ImageGenerationFeedback.imageJoinTitle(language: .zhHans) == "正在生成图片...", "image join overlay should have Chinese loading copy")
+        expect(ImageGenerationFeedback.imageJoinTitle(language: .en) == "Generating image...", "image join overlay should have English loading copy")
+        expect(ImageGenerationFeedback.splitNineTitle(language: .zhHans) == "正在切图...", "split-nine overlay should have Chinese loading copy")
+        expect(ImageGenerationFeedback.splitNineTitle(language: .en) == "Splitting image...", "split-nine overlay should have English loading copy")
+        expect(ImageGenerationFeedback.minimumVisibleNanoseconds > 0, "loading feedback should stay visible for at least one render window")
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
