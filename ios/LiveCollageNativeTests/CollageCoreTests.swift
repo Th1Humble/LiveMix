@@ -26,7 +26,12 @@ struct CollageCoreTests {
 
     private static func testLiveTemplatesExposeExpectedSlotCounts() {
         let slotCounts = Dictionary(uniqueKeysWithValues: NativeCollageTemplate.liveTemplates.map { ($0.id, $0.slots.count) })
+        let firstTemplate = NativeCollageTemplate.liveTemplates.first
 
+        expect(firstTemplate?.id == "video-to-live", "single video-to-live template should be the first live template")
+        expect(firstTemplate?.slots.count == 1, "video-to-live should use 1 slot")
+        expect(firstTemplate?.slots.first?.rect == CGRect(x: 0, y: 0, width: 1, height: 1), "video-to-live should cover the full canvas")
+        expect(slotCounts["video-to-live"] == 1, "video-to-live should use 1 slot")
         expect(slotCounts["left-right"] == 2, "left-right should use 2 slots")
         expect(slotCounts["top-bottom"] == 2, "top-bottom should use 2 slots")
         expect(slotCounts["three-columns"] == 3, "three-columns should use 3 slots")
@@ -216,11 +221,18 @@ struct CollageCoreTests {
     private static func testAppLanguageTranslationsAndToggle() {
         expect(AppLanguage.zhHans.text(.homeTitle) == "选择一种拼接方式？", "Chinese home title should stay localized")
         expect(AppLanguage.en.text(.homeTitle) == "Choose a collage mode", "English home title should be available")
+        expect(AppLanguage.zhHans.text(.liveEntryTitle) == "视频转 Live Photo", "Chinese live entry title should describe video conversion")
+        expect(AppLanguage.en.text(.liveEntryTitle) == "Video to Live Photo", "English live entry title should describe video conversion")
+        expect(AppLanguage.zhHans.text(.liveEntrySubtitle) == "轻松制作动态照片", "Chinese live entry subtitle should stay concise")
+        expect(AppLanguage.en.text(.liveEntrySubtitle) == "Create Live Photos", "English live entry subtitle should stay concise")
         expect(AppLanguage.zhHans.next == .en, "Chinese toggle should switch to English")
         expect(AppLanguage.en.next == .zhHans, "English toggle should switch to Chinese")
 
-        let template = NativeCollageTemplate.liveTemplates.first { $0.id == "left-right" }!
-        expect(template.localizedName(.en) == "Side by Side", "template names should localize to English")
+        let singleTemplate = NativeCollageTemplate.liveTemplates.first { $0.id == "video-to-live" }!
+        let sideTemplate = NativeCollageTemplate.liveTemplates.first { $0.id == "left-right" }!
+        expect(singleTemplate.localizedName(.zhHans) == "单段视频", "single video template should localize to Chinese")
+        expect(singleTemplate.localizedName(.en) == "Single Video", "single video template should localize to English")
+        expect(sideTemplate.localizedName(.en) == "Side by Side", "template names should localize to English")
         expect(ImageJoinMode.vertical.localizedTitle(.en) == "Stacked", "image join mode should localize to English")
     }
 

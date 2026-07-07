@@ -324,8 +324,8 @@ private struct HomeImageEntryCard: View {
 private struct HomeLiveTemplateMosaic: View {
     private let templates = [
         NativeCollageTemplate.liveTemplates[0],
-        NativeCollageTemplate.liveTemplates[4],
-        NativeCollageTemplate.liveTemplates[5],
+        NativeCollageTemplate.liveTemplates[1],
+        NativeCollageTemplate.liveTemplates[6],
     ]
 
     var body: some View {

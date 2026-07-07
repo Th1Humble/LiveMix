@@ -4,7 +4,7 @@ Native iOS app for making Live Photo and image collages.
 
 ## Scope
 
-- **Live 拼接**：多段视频选择模板后在本机合成为一张 Live Photo。
+- **Video → Live**：单段视频转 Live Photo，也支持多段视频按模板拼接。
 - **图片拼接**：左右拼接、上下拼接，支持图片和 Live Photo 输入。
 - **九宫格切图**：一张图片切成 9 张方图，适合朋友圈/社交平台发布。
 - **本机保存**：通过 PhotoKit 写入系统相册，不依赖服务端。

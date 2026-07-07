@@ -257,8 +257,8 @@ enum AppStrings {
         .homeSubtitle: "选中入口，即刻开始。",
         .homeTopTagline: "把精彩，拼成一张 Live。",
         .start: "开始",
-        .liveEntryTitle: "Video → Live",
-        .liveEntrySubtitle: "多段视频，生成一张 Live Photo。",
+        .liveEntryTitle: "视频转 Live Photo",
+        .liveEntrySubtitle: "轻松制作动态照片",
         .imageEntryTitle: "图片拼接",
         .imageEntrySubtitle: "支持图片、Live Photo 自由拼接。",
         .horizontalShort: "左右",
@@ -278,8 +278,8 @@ enum AppStrings {
         .templatesTitle: "选择模板",
         .templatesSubtitle: "先选画面结构，再放视频。",
         .localOnlyMessage: "当前版本会在本机合成，不上传服务端。",
-        .fillVideosTitle: "填入视频并调整画面",
-        .fillVideosSubtitle: "一次选择素材，选中槽位后调整画面和片段。",
+        .fillVideosTitle: "选择视频并调整画面",
+        .fillVideosSubtitle: "选中槽位后调整画面和片段。",
         .generating: "正在生成",
         .loadingVideo: "正在读取视频",
         .generateLivePhoto: "生成 Live Photo",
@@ -369,8 +369,8 @@ enum AppStrings {
         .homeSubtitle: "Pick a workflow and start.",
         .homeTopTagline: "Turn moments into one Live.",
         .start: "Start",
-        .liveEntryTitle: "Video → Live",
-        .liveEntrySubtitle: "Combine videos into one Live Photo.",
+        .liveEntryTitle: "Video to Live Photo",
+        .liveEntrySubtitle: "Create Live Photos",
         .imageEntryTitle: "Image Collage",
         .imageEntrySubtitle: "Join images and Live Photos freely.",
         .horizontalShort: "Side",
@@ -390,8 +390,8 @@ enum AppStrings {
         .templatesTitle: "Choose Layout",
         .templatesSubtitle: "Pick a structure, then add videos.",
         .localOnlyMessage: "Everything is processed on this iPhone.",
-        .fillVideosTitle: "Add videos and adjust",
-        .fillVideosSubtitle: "Select clips once, then tune each slot.",
+        .fillVideosTitle: "Choose video and adjust",
+        .fillVideosSubtitle: "Tune each slot's framing and timing.",
         .generating: "Generating",
         .loadingVideo: "Loading video",
         .generateLivePhoto: "Generate Live Photo",
@@ -505,6 +505,14 @@ struct NativeCollageTemplate: Hashable, Identifiable {
 
     static let liveTemplates: [NativeCollageTemplate] = [
         NativeCollageTemplate(
+            id: "video-to-live",
+            name: "单段视频",
+            detail: "生成 Live Photo",
+            slots: [
+                CollageSlot(id: 0, x: 0, y: 0, width: 1, height: 1),
+            ]
+        ),
+        NativeCollageTemplate(
             id: "left-right",
             name: "左右",
             detail: "两段并排",
@@ -567,6 +575,8 @@ struct NativeCollageTemplate: Hashable, Identifiable {
 
     func localizedName(_ language: AppLanguage) -> String {
         switch id {
+        case "video-to-live":
+            return language == .zhHans ? "单段视频" : "Single Video"
         case "left-right":
             return language == .zhHans ? "左右" : "Side by Side"
         case "top-bottom":
@@ -586,18 +596,20 @@ struct NativeCollageTemplate: Hashable, Identifiable {
 
     func localizedDetail(_ language: AppLanguage) -> String {
         switch id {
+        case "video-to-live":
+            return language == .zhHans ? "转为 Live Photo" : "Convert to Live Photo"
         case "left-right":
-            return language == .zhHans ? "两段并排" : "Two clips side by side"
+            return language == .zhHans ? "左右拼接" : "Side by Side"
         case "top-bottom":
-            return language == .zhHans ? "两段叠放" : "Two clips stacked"
+            return language == .zhHans ? "上下拼接" : "Top & Bottom"
         case "three-columns":
-            return language == .zhHans ? "三段横排" : "Three vertical columns"
+            return language == .zhHans ? "三列拼接" : "3 Columns"
         case "three-rows":
-            return language == .zhHans ? "三段竖排" : "Three horizontal rows"
+            return language == .zhHans ? "三行拼接" : "3 Rows"
         case "grid-2x2":
-            return language == .zhHans ? "四段网格" : "Four clip grid"
+            return language == .zhHans ? "四宫格拼接" : "2×2 Grid"
         case "one-big-two-small":
-            return language == .zhHans ? "主画面加两个小画面" : "One hero clip with two smaller clips"
+            return language == .zhHans ? "一大两小" : "1 Large + 2 Small"
         default:
             return detail
         }
