@@ -71,6 +71,13 @@ enum AppLanguage: String, CaseIterable, Hashable {
         self == .zhHans ? "视频 \(index + 1) 暂时无法读取，请换一个视频。" : "Video \(index + 1) cannot be read. Try another video."
     }
 
+    func videoTooLong(_ index: Int, maximumDuration: Int) -> String {
+        if self == .zhHans {
+            return "视频 \(index + 1) 超过 \(maximumDuration) 秒，请先裁剪后再选择。"
+        }
+        return "Video \(index + 1) is longer than \(maximumDuration) seconds. Trim it before selecting."
+    }
+
     func liveEditorKicker(template: NativeCollageTemplate) -> String {
         if self == .zhHans {
             return "\(template.localizedName(self))模板 · \(clipCount(template.slots.count))素材"
@@ -922,6 +929,32 @@ struct NativeImageEdit: Hashable {
 }
 
 enum NativeVideoRenderLayout {
+    static func orientedGeometry(
+        naturalSize: CGSize,
+        preferredTransform: CGAffineTransform
+    ) -> (transform: CGAffineTransform, size: CGSize)? {
+        guard naturalSize.width > 0, naturalSize.height > 0 else {
+            return nil
+        }
+
+        let sourceBounds = CGRect(origin: .zero, size: naturalSize)
+        let transformedBounds = sourceBounds.applying(preferredTransform).standardized
+        guard transformedBounds.width.isFinite,
+              transformedBounds.height.isFinite,
+              transformedBounds.width > 0,
+              transformedBounds.height > 0 else {
+            return nil
+        }
+
+        let normalizedTransform = preferredTransform.concatenating(
+            CGAffineTransform(
+                translationX: -transformedBounds.minX,
+                y: -transformedBounds.minY
+            )
+        )
+        return (normalizedTransform, transformedBounds.size)
+    }
+
     static func slotRect(for slot: CollageSlot, in renderSize: CGSize) -> CGRect {
         let minX = (slot.x * renderSize.width).rounded()
         let minY = (slot.y * renderSize.height).rounded()

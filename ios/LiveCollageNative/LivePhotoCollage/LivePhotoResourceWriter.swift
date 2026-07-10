@@ -1,6 +1,7 @@
 @preconcurrency import AVFoundation
 import Foundation
 import ImageIO
+import OSLog
 import UniformTypeIdentifiers
 
 struct PreparedLivePhotoResources {
@@ -9,6 +10,11 @@ struct PreparedLivePhotoResources {
 }
 
 enum LivePhotoResourceWriter {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "LiveMix",
+        category: "LivePhotoResourceWriter"
+    )
+
     static func prepare(imageURL: URL, videoURL: URL) async throws -> PreparedLivePhotoResources {
         let identifier = UUID().uuidString.uppercased()
         let preparedImageURL = FileManager.default.temporaryDirectory
@@ -18,8 +24,22 @@ enum LivePhotoResourceWriter {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("mov")
 
-        try writePairedImage(inputURL: imageURL, outputURL: preparedImageURL, identifier: identifier)
-        try await writePairedVideo(inputURL: videoURL, outputURL: preparedVideoURL, identifier: identifier)
+        logger.info(
+            "Pairing Live Photo resources: imageBytes=\(fileSize(at: imageURL)), videoBytes=\(fileSize(at: videoURL))"
+        )
+        do {
+            try writePairedImage(inputURL: imageURL, outputURL: preparedImageURL, identifier: identifier)
+            try await writePairedVideo(inputURL: videoURL, outputURL: preparedVideoURL, identifier: identifier)
+        } catch {
+            logger.error(
+                "Live Photo resource pairing failed: \(String(reflecting: error), privacy: .public)"
+            )
+            throw error
+        }
+
+        logger.info(
+            "Live Photo resources paired: imageBytes=\(fileSize(at: preparedImageURL)), videoBytes=\(fileSize(at: preparedVideoURL))"
+        )
 
         return PreparedLivePhotoResources(imageURL: preparedImageURL, videoURL: preparedVideoURL)
     }
@@ -59,6 +79,12 @@ enum LivePhotoResourceWriter {
         guard let videoTrack = videoTracks.first else {
             throw LivePhotoResourceError.invalidVideo
         }
+        let timeRange = try await videoTrack.load(.timeRange)
+        let naturalSize = try await videoTrack.load(.naturalSize)
+        let preferredTransform = try await videoTrack.load(.preferredTransform)
+        logger.info(
+            "Pairing video track: range=\(describe(timeRange), privacy: .public), naturalSize=\(describe(naturalSize), privacy: .public), transform=\(describe(preferredTransform), privacy: .public)"
+        )
 
         let reader = try AVAssetReader(asset: asset)
         let readerOutput = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: nil)
@@ -125,6 +151,10 @@ enum LivePhotoResourceWriter {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let queue = DispatchQueue(label: "live-photo-video-writer")
             var didResume = false
+            var sampleCount = 0
+            var timestampOffset: CMTime?
+            var firstInputPresentationTime = CMTime.invalid
+            var lastOutputEndTime = CMTime.zero
 
             func finish(_ result: Result<Void, Error>) {
                 guard !didResume else { return }
@@ -132,14 +162,27 @@ enum LivePhotoResourceWriter {
 
                 switch result {
                 case .success:
+                    if lastOutputEndTime > .zero {
+                        writer.endSession(atSourceTime: lastOutputEndTime)
+                    }
+                    logger.info(
+                        "Video samples copied: count=\(sampleCount), firstInputPTS=\(describe(firstInputPresentationTime), privacy: .public), outputEnd=\(describe(lastOutputEndTime), privacy: .public)"
+                    )
                     writer.finishWriting {
                         if writer.status == .completed {
+                            logger.info("Paired video writer completed")
                             continuation.resume()
                         } else {
+                            logger.error(
+                                "Paired video writer failed: \(String(reflecting: writer.error), privacy: .public)"
+                            )
                             continuation.resume(throwing: writer.error ?? LivePhotoResourceError.videoWriteFailed)
                         }
                     }
                 case .failure(let error):
+                    logger.error(
+                        "Copying paired video samples failed: \(String(reflecting: error), privacy: .public)"
+                    )
                     reader.cancelReading()
                     writer.cancelWriting()
                     continuation.resume(throwing: error)
@@ -149,9 +192,37 @@ enum LivePhotoResourceWriter {
             writerInput.requestMediaDataWhenReady(on: queue) {
                 while writerInput.isReadyForMoreMediaData {
                     if let sampleBuffer = readerOutput.copyNextSampleBuffer() {
-                        guard writerInput.append(sampleBuffer) else {
+                        let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                        if timestampOffset == nil {
+                            timestampOffset = presentationTime.isValid && !presentationTime.isIndefinite
+                                ? presentationTime
+                                : .zero
+                            firstInputPresentationTime = presentationTime
+                        }
+
+                        let outputSample: CMSampleBuffer
+                        do {
+                            outputSample = try retimedSampleBuffer(
+                                sampleBuffer,
+                                subtracting: timestampOffset ?? .zero
+                            )
+                        } catch {
+                            finish(.failure(error))
+                            return
+                        }
+
+                        guard writerInput.append(outputSample) else {
                             finish(.failure(writer.error ?? LivePhotoResourceError.videoWriteFailed))
                             return
+                        }
+                        sampleCount += 1
+                        let outputPresentationTime = CMSampleBufferGetPresentationTimeStamp(outputSample)
+                        let outputDuration = CMSampleBufferGetDuration(outputSample)
+                        if outputPresentationTime.isValid, !outputPresentationTime.isIndefinite {
+                            let sampleEnd = outputDuration.isValid && !outputDuration.isIndefinite
+                                ? CMTimeAdd(outputPresentationTime, outputDuration)
+                                : outputPresentationTime
+                            lastOutputEndTime = max(lastOutputEndTime, sampleEnd)
                         }
                     } else {
                         writerInput.markAsFinished()
@@ -166,6 +237,78 @@ enum LivePhotoResourceWriter {
                 }
             }
         }
+    }
+
+    private static func retimedSampleBuffer(
+        _ sampleBuffer: CMSampleBuffer,
+        subtracting offset: CMTime
+    ) throws -> CMSampleBuffer {
+        guard offset.isValid, !offset.isIndefinite, offset != .zero else {
+            return sampleBuffer
+        }
+
+        var timingCount = 0
+        let countStatus = CMSampleBufferGetSampleTimingInfoArray(
+            sampleBuffer,
+            entryCount: 0,
+            arrayToFill: nil,
+            entriesNeededOut: &timingCount
+        )
+        guard countStatus == noErr, timingCount > 0 else {
+            throw LivePhotoResourceError.videoWriteFailed
+        }
+
+        var timing = [CMSampleTimingInfo](
+            repeating: CMSampleTimingInfo(
+                duration: .invalid,
+                presentationTimeStamp: .invalid,
+                decodeTimeStamp: .invalid
+            ),
+            count: timingCount
+        )
+        let timingStatus = timing.withUnsafeMutableBufferPointer { buffer in
+            CMSampleBufferGetSampleTimingInfoArray(
+                sampleBuffer,
+                entryCount: buffer.count,
+                arrayToFill: buffer.baseAddress,
+                entriesNeededOut: &timingCount
+            )
+        }
+        guard timingStatus == noErr else {
+            throw LivePhotoResourceError.videoWriteFailed
+        }
+
+        for index in timing.indices {
+            if timing[index].presentationTimeStamp.isValid,
+               !timing[index].presentationTimeStamp.isIndefinite {
+                timing[index].presentationTimeStamp = CMTimeSubtract(
+                    timing[index].presentationTimeStamp,
+                    offset
+                )
+            }
+            if timing[index].decodeTimeStamp.isValid,
+               !timing[index].decodeTimeStamp.isIndefinite {
+                timing[index].decodeTimeStamp = CMTimeSubtract(
+                    timing[index].decodeTimeStamp,
+                    offset
+                )
+            }
+        }
+
+        var output: CMSampleBuffer?
+        let createStatus = timing.withUnsafeBufferPointer { buffer in
+            CMSampleBufferCreateCopyWithNewTiming(
+                allocator: kCFAllocatorDefault,
+                sampleBuffer: sampleBuffer,
+                sampleTimingEntryCount: buffer.count,
+                sampleTimingArray: buffer.baseAddress!,
+                sampleBufferOut: &output
+            )
+        }
+        guard createStatus == noErr, let output else {
+            throw LivePhotoResourceError.videoWriteFailed
+        }
+        return output
     }
 
     private static func contentIdentifierMetadata(_ identifier: String) -> AVMetadataItem {
@@ -209,6 +352,36 @@ enum LivePhotoResourceWriter {
         }
 
         return formatDescription
+    }
+
+    private static func fileSize(at url: URL) -> Int64 {
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+        return Int64(values?.fileSize ?? 0)
+    }
+
+    private static func describe(_ time: CMTime) -> String {
+        guard time.isValid, !time.isIndefinite else { return "invalid" }
+        return String(format: "%.4f", CMTimeGetSeconds(time))
+    }
+
+    private static func describe(_ range: CMTimeRange) -> String {
+        "start=\(describe(range.start)), duration=\(describe(range.duration))"
+    }
+
+    private static func describe(_ size: CGSize) -> String {
+        String(format: "%.0fx%.0f", size.width, size.height)
+    }
+
+    private static func describe(_ transform: CGAffineTransform) -> String {
+        String(
+            format: "[%.3f %.3f %.3f %.3f %.1f %.1f]",
+            transform.a,
+            transform.b,
+            transform.c,
+            transform.d,
+            transform.tx,
+            transform.ty
+        )
     }
 }
 

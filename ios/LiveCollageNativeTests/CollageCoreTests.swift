@@ -11,6 +11,8 @@ struct CollageCoreTests {
         testLiveResultPrimaryActionTitleReflectsSaveState()
         testPhotoResultPrimaryActionTitleReflectsSaveState()
         testNativeVideoRenderLayoutRendersEachClipAtSlotSizeBeforeOverlay()
+        testNativeVideoRenderLayoutNormalizesPortraitTransforms()
+        testNativeVideoRenderLayoutNormalizesTranslatedMirrors()
         testSliderRangeExpandsDegenerateBounds()
         testNativeImageEditClampsToImageEditorBounds()
         testNativeImageEditDragUpdatesFocalPoint()
@@ -108,6 +110,45 @@ struct CollageCoreTests {
 
         expect(renderedBounds.minX == -690, "wide fill source should be centered before the slot renderer clips it")
         expect(renderedBounds.width == 1920, "fill transform should preserve the scaled overflow for slot-local clipping")
+    }
+
+    private static func testNativeVideoRenderLayoutNormalizesPortraitTransforms() {
+        let portraitTransform = CGAffineTransform(
+            a: 0,
+            b: 1,
+            c: -1,
+            d: 0,
+            tx: 1080,
+            ty: 0
+        )
+        let geometry = NativeVideoRenderLayout.orientedGeometry(
+            naturalSize: CGSize(width: 1920, height: 1080),
+            preferredTransform: portraitTransform
+        )
+        let renderedBounds = CGRect(
+            origin: .zero,
+            size: CGSize(width: 1920, height: 1080)
+        ).applying(geometry?.transform ?? .identity).standardized
+
+        expect(geometry?.size == CGSize(width: 1080, height: 1920), "portrait video should expose its oriented size")
+        expect(renderedBounds.origin == .zero, "already translated portrait transforms must not receive a second translation")
+        expect(renderedBounds.size == geometry?.size, "portrait bounds should stay inside the render canvas")
+    }
+
+    private static func testNativeVideoRenderLayoutNormalizesTranslatedMirrors() {
+        let mirroredTransform = CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: 1920, ty: 0)
+        let geometry = NativeVideoRenderLayout.orientedGeometry(
+            naturalSize: CGSize(width: 1920, height: 1080),
+            preferredTransform: mirroredTransform
+        )
+        let renderedBounds = CGRect(
+            origin: .zero,
+            size: CGSize(width: 1920, height: 1080)
+        ).applying(geometry?.transform ?? .identity).standardized
+
+        expect(geometry?.size == CGSize(width: 1920, height: 1080), "mirrored video should preserve its display size")
+        expect(renderedBounds.origin == .zero, "mirrored video should be normalized to the canvas origin")
+        expect(renderedBounds.size == geometry?.size, "mirrored bounds should stay inside the render canvas")
     }
 
     private static func testSliderRangeExpandsDegenerateBounds() {
@@ -225,6 +266,8 @@ struct CollageCoreTests {
         expect(AppLanguage.en.text(.liveEntryTitle) == "Video to Live Photo", "English live entry title should describe video conversion")
         expect(AppLanguage.zhHans.text(.liveEntrySubtitle) == "轻松制作动态照片", "Chinese live entry subtitle should stay concise")
         expect(AppLanguage.en.text(.liveEntrySubtitle) == "Create Live Photos", "English live entry subtitle should stay concise")
+        expect(AppLanguage.zhHans.videoTooLong(0, maximumDuration: 5) == "视频 1 超过 5 秒，请先裁剪后再选择。", "Chinese duration-limit feedback should identify the slot")
+        expect(AppLanguage.en.videoTooLong(1, maximumDuration: 5) == "Video 2 is longer than 5 seconds. Trim it before selecting.", "English duration-limit feedback should identify the slot")
         expect(AppLanguage.zhHans.next == .en, "Chinese toggle should switch to English")
         expect(AppLanguage.en.next == .zhHans, "English toggle should switch to Chinese")
 

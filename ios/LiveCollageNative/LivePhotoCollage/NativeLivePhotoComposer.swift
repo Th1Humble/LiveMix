@@ -1,6 +1,7 @@
 @preconcurrency import AVFoundation
 import CoreGraphics
 import Foundation
+import OSLog
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -28,6 +29,7 @@ struct NativeLiveDraft: Identifiable, Hashable {
 enum NativeLivePhotoComposerError: LocalizedError {
     case missingVideos
     case unreadableVideo
+    case videoTooLong
     case videoTooShort
     case exportFailed
     case stillFrameFailed
@@ -38,6 +40,8 @@ enum NativeLivePhotoComposerError: LocalizedError {
             return "请先选满当前模板需要的视频。"
         case .unreadableVideo:
             return "有视频暂时无法读取，请换一个视频试试。"
+        case .videoTooLong:
+            return "视频不能超过 5 秒，请先裁剪后再试。"
         case .videoTooShort:
             return "视频太短，暂时无法合成 Live Photo。"
         case .exportFailed:
@@ -49,6 +53,11 @@ enum NativeLivePhotoComposerError: LocalizedError {
 }
 
 actor NativeLivePhotoComposer {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "LiveMix",
+        category: "LivePhotoComposer"
+    )
+
     func compose(
         template: NativeCollageTemplate,
         videos: [NativeVideoSelection],
@@ -81,6 +90,10 @@ actor NativeLivePhotoComposer {
             throw NativeLivePhotoComposerError.missingVideos
         }
 
+        Self.logger.info(
+            "Compose started: template=\(template.id, privacy: .public), videos=\(videoURLs.count)"
+        )
+
         let sourceURLs = videoURLs
         let normalizedEdits = NativeSlotEdit.edits(edits, fitting: template.slots.count)
         let composedVideoURL = FileManager.default.temporaryDirectory
@@ -105,6 +118,8 @@ actor NativeLivePhotoComposer {
             imageURL: stillImageURL,
             videoURL: composedVideoURL
         )
+
+        Self.logger.info("Compose completed and Live Photo resources are paired")
 
         cleanup(urls: (shouldCleanupSourceURLs ? sourceURLs : []) + [composedVideoURL, stillImageURL])
         return NativeLiveDraft(imageURL: prepared.imageURL, videoURL: prepared.videoURL)
@@ -152,7 +167,15 @@ struct PickedVideo: Transferable {
     }
 }
 
+enum NativeVideoInputLimits {
+    static let maximumDuration = 5.0
+}
+
 private enum NativeVideoComposer {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "LiveMix",
+        category: "VideoPipeline"
+    )
     private static let renderSize = CGSize(width: 1080, height: 1080)
     private static let maxDuration = CMTime(seconds: 3, preferredTimescale: 600)
     private static let minDuration = CMTime(seconds: 0.5, preferredTimescale: 600)
@@ -171,6 +194,9 @@ private enum NativeVideoComposer {
         let assets = sourceURLs.map { AVURLAsset(url: $0) }
         let normalizedEdits = NativeSlotEdit.edits(edits, fitting: template.slots.count)
         let outputDuration = try await resolvedOutputDuration(for: assets, edits: normalizedEdits)
+        logger.info(
+            "Video composition started: slots=\(assets.count), outputDuration=\(seconds(outputDuration), privacy: .public)s"
+        )
         var renderedSlots: [RenderedSlotVideo] = []
         var intermediateURLs: [URL] = []
 
@@ -179,14 +205,16 @@ private enum NativeVideoComposer {
         }
 
         for (index, asset) in assets.enumerated() {
-            let assetDuration = try await asset.load(.duration)
+            let sourceTrack = try await videoTrack(for: asset)
+            let sourceTimeRange = try await usableTimeRange(for: sourceTrack)
+            let naturalSize = try await sourceTrack.load(.naturalSize)
+            let preferredTransform = try await sourceTrack.load(.preferredTransform)
+            logger.info(
+                "Input slot \(index): range=\(describe(sourceTimeRange), privacy: .public), naturalSize=\(describe(naturalSize), privacy: .public), transform=\(describe(preferredTransform), privacy: .public)"
+            )
             let outputSeconds = CMTimeGetSeconds(outputDuration)
-            let maxStart = max(0, CMTimeGetSeconds(assetDuration) - outputSeconds)
+            let maxStart = max(0, CMTimeGetSeconds(sourceTimeRange.duration) - outputSeconds)
             let edit = normalizedEdits[index].clamped(maxStart: maxStart)
-            let videoTracks = try await asset.loadTracks(withMediaType: .video)
-            guard let sourceTrack = videoTracks.first else {
-                throw NativeLivePhotoComposerError.unreadableVideo
-            }
 
             let slotRect = slotRenderRect(for: template.slots[index])
             let slotURL = FileManager.default.temporaryDirectory
@@ -196,10 +224,14 @@ private enum NativeVideoComposer {
 
             try await renderSlotVideo(
                 sourceTrack: sourceTrack,
+                sourceTimeRange: sourceTimeRange,
                 edit: edit,
                 slotSize: slotRect.size,
                 outputDuration: outputDuration,
                 outputURL: slotURL
+            )
+            logger.info(
+                "Rendered slot \(index): bytes=\(fileSize(at: slotURL)), target=\(describe(slotRect.size), privacy: .public)"
             )
             renderedSlots.append(RenderedSlotVideo(url: slotURL, slotRect: slotRect))
         }
@@ -209,10 +241,12 @@ private enum NativeVideoComposer {
             outputDuration: outputDuration,
             outputURL: outputURL
         )
+        logger.info("Final video composed: bytes=\(fileSize(at: outputURL))")
     }
 
     private static func renderSlotVideo(
         sourceTrack: AVAssetTrack,
+        sourceTimeRange: CMTimeRange,
         edit: NativeSlotEdit,
         slotSize: CGSize,
         outputDuration: CMTime,
@@ -226,9 +260,18 @@ private enum NativeVideoComposer {
             throw NativeLivePhotoComposerError.unreadableVideo
         }
 
-        let startTime = CMTime(seconds: edit.start, preferredTimescale: 600)
+        let editOffset = CMTime(seconds: edit.start, preferredTimescale: 600)
+        let requestedStart = CMTimeAdd(sourceTimeRange.start, editOffset)
+        let latestStart = CMTimeSubtract(CMTimeRangeGetEnd(sourceTimeRange), outputDuration)
+        guard CMTimeCompare(latestStart, sourceTimeRange.start) >= 0 else {
+            throw NativeLivePhotoComposerError.videoTooShort
+        }
+
+        let startTime = CMTimeCompare(requestedStart, latestStart) > 0 ? latestStart : requestedStart
+        let requestedRange = CMTimeRange(start: startTime, duration: outputDuration)
+
         try compositionTrack.insertTimeRange(
-            CMTimeRange(start: startTime, duration: outputDuration),
+            requestedRange,
             of: sourceTrack,
             at: .zero
         )
@@ -264,9 +307,9 @@ private enum NativeVideoComposer {
 
         for renderedSlot in renderedSlots {
             let asset = AVURLAsset(url: renderedSlot.url)
-            let videoTracks = try await asset.loadTracks(withMediaType: .video)
-            guard let sourceTrack = videoTracks.first,
-                  let compositionTrack = composition.addMutableTrack(
+            let sourceTrack = try await videoTrack(for: asset)
+            let sourceTimeRange = try await usableTimeRange(for: sourceTrack)
+            guard let compositionTrack = composition.addMutableTrack(
                     withMediaType: .video,
                     preferredTrackID: kCMPersistentTrackID_Invalid
                   ) else {
@@ -274,7 +317,7 @@ private enum NativeVideoComposer {
             }
 
             try compositionTrack.insertTimeRange(
-                CMTimeRange(start: .zero, duration: outputDuration),
+                CMTimeRange(start: sourceTimeRange.start, duration: outputDuration),
                 of: sourceTrack,
                 at: .zero
             )
@@ -315,6 +358,16 @@ private enum NativeVideoComposer {
         generator.maximumSize = renderSize
 
         let cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
+        let luminance = averageLuminance(of: cgImage)
+        if luminance < 0.015 {
+            logger.warning(
+                "The first frame is nearly black: averageLuminance=\(luminance, format: .fixed(precision: 4))"
+            )
+        } else {
+            logger.info(
+                "First frame decoded: averageLuminance=\(luminance, format: .fixed(precision: 4))"
+            )
+        }
         let image = UIImage(cgImage: cgImage)
         guard let data = image.jpegData(compressionQuality: 0.95) else {
             throw NativeLivePhotoComposerError.stillFrameFailed
@@ -327,24 +380,56 @@ private enum NativeVideoComposer {
         for assets: [AVURLAsset],
         edits: [NativeSlotEdit]
     ) async throws -> CMTime {
-        var durationSeconds = NativeSlotEdit.outputDuration(for: edits)
+        var duration = min(
+            maxDuration,
+            CMTime(seconds: NativeSlotEdit.outputDuration(for: edits), preferredTimescale: 600)
+        )
 
         for (index, asset) in assets.enumerated() {
-            let assetDuration = try await asset.load(.duration)
-            guard assetDuration > .zero else {
-                throw NativeLivePhotoComposerError.unreadableVideo
+            let track = try await videoTrack(for: asset)
+            let timeRange = try await usableTimeRange(for: track)
+            guard CMTimeGetSeconds(timeRange.duration) <= NativeVideoInputLimits.maximumDuration else {
+                throw NativeLivePhotoComposerError.videoTooLong
             }
-
-            let assetSeconds = CMTimeGetSeconds(assetDuration)
-            let editDuration = index < edits.count ? NativeSlotEdit.normalizedDuration(edits[index].duration) : NativeSlotEdit.maxDuration
-            durationSeconds = min(durationSeconds, editDuration, assetSeconds)
+            let trackDuration = CMTimeConvertScale(
+                timeRange.duration,
+                timescale: 600,
+                method: .roundTowardZero
+            )
+            let editDuration = CMTime(
+                seconds: index < edits.count
+                    ? NativeSlotEdit.normalizedDuration(edits[index].duration)
+                    : NativeSlotEdit.maxDuration,
+                preferredTimescale: 600
+            )
+            duration = min(duration, editDuration, trackDuration)
         }
 
-        let duration = CMTime(seconds: durationSeconds, preferredTimescale: 600)
         guard duration >= minDuration else {
             throw NativeLivePhotoComposerError.videoTooShort
         }
         return duration
+    }
+
+    private static func videoTrack(for asset: AVURLAsset) async throws -> AVAssetTrack {
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        guard let track = tracks.first else {
+            throw NativeLivePhotoComposerError.unreadableVideo
+        }
+        return track
+    }
+
+    private static func usableTimeRange(for track: AVAssetTrack) async throws -> CMTimeRange {
+        let timeRange = try await track.load(.timeRange)
+        let startSeconds = CMTimeGetSeconds(timeRange.start)
+        let durationSeconds = CMTimeGetSeconds(timeRange.duration)
+        guard timeRange.isValid,
+              startSeconds.isFinite,
+              durationSeconds.isFinite,
+              durationSeconds > 0 else {
+            throw NativeLivePhotoComposerError.unreadableVideo
+        }
+        return timeRange
     }
 
     private static func renderTransform(
@@ -368,29 +453,13 @@ private enum NativeVideoComposer {
     ) async throws -> (transform: CGAffineTransform, size: CGSize) {
         let naturalSize = try await track.load(.naturalSize)
         let preferredTransform = try await track.load(.preferredTransform)
-        let transformedSize = naturalSize.applying(preferredTransform)
-        let orientedSize = CGSize(
-            width: abs(transformedSize.width),
-            height: abs(transformedSize.height)
-        )
-
-        guard orientedSize.width > 0, orientedSize.height > 0 else {
+        guard let geometry = NativeVideoRenderLayout.orientedGeometry(
+            naturalSize: naturalSize,
+            preferredTransform: preferredTransform
+        ) else {
             throw NativeLivePhotoComposerError.unreadableVideo
         }
-
-        var normalizedTransform = preferredTransform
-        if transformedSize.width < 0 {
-            normalizedTransform = normalizedTransform.concatenating(
-                CGAffineTransform(translationX: -transformedSize.width, y: 0)
-            )
-        }
-        if transformedSize.height < 0 {
-            normalizedTransform = normalizedTransform.concatenating(
-                CGAffineTransform(translationX: 0, y: -transformedSize.height)
-            )
-        }
-
-        return (normalizedTransform, orientedSize)
+        return geometry
     }
 
     private static func normalizedTrackTransform(for track: AVAssetTrack) async throws -> CGAffineTransform {
@@ -434,14 +503,73 @@ private enum NativeVideoComposer {
                 let exporter = exporterBox.value
                 switch exporter.status {
                 case .completed:
+                    logger.info(
+                        "AVAssetExport completed: bytes=\(fileSize(at: outputURL))"
+                    )
                     continuation.resume()
                 case .failed, .cancelled:
+                    logger.error(
+                        "AVAssetExport failed: status=\(exporter.status.rawValue), error=\(String(reflecting: exporter.error), privacy: .public)"
+                    )
                     continuation.resume(throwing: exporter.error ?? NativeLivePhotoComposerError.exportFailed)
                 default:
                     continuation.resume(throwing: NativeLivePhotoComposerError.exportFailed)
                 }
             }
         }
+    }
+
+    private static func averageLuminance(of image: CGImage) -> Double {
+        let width = 16
+        let height = 16
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        let didRender = pixels.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(
+                data: bytes.baseAddress,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width,
+                space: CGColorSpaceCreateDeviceGray(),
+                bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else {
+                return false
+            }
+            context.interpolationQuality = .low
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard didRender else { return 0 }
+        return pixels.reduce(0) { $0 + Double($1) } / Double(pixels.count * 255)
+    }
+
+    private static func fileSize(at url: URL) -> Int64 {
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+        return Int64(values?.fileSize ?? 0)
+    }
+
+    private static func seconds(_ time: CMTime) -> String {
+        String(format: "%.4f", CMTimeGetSeconds(time))
+    }
+
+    private static func describe(_ range: CMTimeRange) -> String {
+        "start=\(seconds(range.start)), duration=\(seconds(range.duration))"
+    }
+
+    private static func describe(_ size: CGSize) -> String {
+        String(format: "%.0fx%.0f", size.width, size.height)
+    }
+
+    private static func describe(_ transform: CGAffineTransform) -> String {
+        String(
+            format: "[%.3f %.3f %.3f %.3f %.1f %.1f]",
+            transform.a,
+            transform.b,
+            transform.c,
+            transform.d,
+            transform.tx,
+            transform.ty
+        )
     }
 }
 
@@ -456,8 +584,17 @@ private final class UnsafeSendableBox<Value>: @unchecked Sendable {
 enum NativeVideoMetadataLoader {
     static func preview(for videoURL: URL) async -> NativeVideoPreview {
         let asset = AVURLAsset(url: videoURL)
-        let duration = try? await asset.load(.duration)
-        let thumbnail = try? makeThumbnail(from: asset)
+        let videoTracks = try? await asset.loadTracks(withMediaType: .video)
+        let timeRange: CMTimeRange?
+        if let videoTrack = videoTracks?.first {
+            timeRange = try? await videoTrack.load(.timeRange)
+        } else {
+            timeRange = nil
+        }
+        let assetDuration = try? await asset.load(.duration)
+        let duration = timeRange?.duration ?? assetDuration
+        let thumbnailTime = timeRange?.start ?? .zero
+        let thumbnail = try? makeThumbnail(from: asset, at: thumbnailTime)
 
         return NativeVideoPreview(
             url: videoURL,
@@ -469,12 +606,12 @@ enum NativeVideoMetadataLoader {
         )
     }
 
-    private static func makeThumbnail(from asset: AVURLAsset) throws -> UIImage {
+    private static func makeThumbnail(from asset: AVURLAsset, at time: CMTime) throws -> UIImage {
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 720, height: 720)
 
-        let cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
+        let cgImage = try generator.copyCGImage(at: time, actualTime: nil)
         return UIImage(cgImage: cgImage)
     }
 }
@@ -487,6 +624,7 @@ struct NativeVideoPreview: @unchecked Sendable {
 
 enum NativeVideoPreviewLoadError: Error {
     case timeout
+    case durationTooLong
 }
 
 struct NativeImageJoinLiveSource: @unchecked Sendable {

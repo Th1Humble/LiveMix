@@ -2,6 +2,7 @@ import Photos
 import PhotosUI
 import SwiftUI
 import AVKit
+import OSLog
 import UIKit
 import UniformTypeIdentifiers
 
@@ -50,18 +51,19 @@ private extension EnvironmentValues {
 }
 
 private enum AppTheme {
-    static let primary = Color(red: 0.5315, green: 0.0663, blue: 0.3500)
-    static let primaryHover = Color(red: 0.4540, green: 0.0000, blue: 0.2853)
-    static let primarySoft = Color(red: 0.9905, green: 0.9100, blue: 0.9441)
-    static let accent = Color(red: 0.2925, green: 0.3945, blue: 0.8505)
-    static let accentSoft = Color(red: 0.8906, green: 0.9207, blue: 1.0000)
-    static let ink = Color(red: 0.0284, green: 0.0284, blue: 0.0284)
-    static let muted = Color(red: 0.2806, green: 0.2806, blue: 0.2806)
-    static let faint = Color(red: 0.4447, green: 0.4447, blue: 0.4447)
-    static let surface = Color(red: 0.9671, green: 0.9671, blue: 0.9671)
-    static let raised = Color(red: 0.9410, green: 0.9410, blue: 0.9410)
-    static let border = Color(red: 0.8827, green: 0.8827, blue: 0.8827)
-    static let error = Color(red: 0.7315, green: 0.0253, blue: 0.1194)
+    static let primary = Color(red: 0.055, green: 0.420, blue: 0.365)
+    static let primaryHover = Color(red: 0.035, green: 0.330, blue: 0.295)
+    static let primarySoft = Color(red: 0.882, green: 0.956, blue: 0.936)
+    static let accent = Color(red: 0.245, green: 0.390, blue: 0.760)
+    static let accentSoft = Color(red: 0.902, green: 0.928, blue: 0.990)
+    static let ink = Color(red: 0.075, green: 0.090, blue: 0.105)
+    static let muted = Color(red: 0.310, green: 0.335, blue: 0.355)
+    static let faint = Color(red: 0.490, green: 0.515, blue: 0.535)
+    static let canvas = Color(red: 0.965, green: 0.973, blue: 0.974)
+    static let surface = Color(red: 0.945, green: 0.955, blue: 0.956)
+    static let raised = Color(red: 0.905, green: 0.922, blue: 0.923)
+    static let border = Color(red: 0.835, green: 0.855, blue: 0.858)
+    static let error = Color(red: 0.690, green: 0.105, blue: 0.145)
 }
 
 private struct AppSplashScreen: View {
@@ -131,17 +133,18 @@ private struct HomeScreen: View {
             HomeTopBar()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 7) {
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 5) {
                         Text(language.text(.homeTitle))
-                            .font(.system(size: 28, weight: .semibold))
+                            .font(.system(size: 26, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
                         Text(language.text(.homeSubtitle))
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(AppTheme.muted)
                     }
+                    .padding(.bottom, 4)
 
                     NavigationLink {
                         LiveTemplatePickerScreen()
@@ -156,28 +159,30 @@ private struct HomeScreen: View {
                         HomeImageEntryCard()
                     }
                     .buttonStyle(.plain)
-
-                    HomeCapabilityStrip()
-
-                    HomeFeedbackLink()
-
-                    NavigationLink {
-                        PrivacyPolicyScreen()
-                    } label: {
-                        Text(language.text(.privacyPolicy))
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppTheme.faint)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 2)
-                    }
-                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 34)
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
+                .padding(.bottom, 18)
             }
+
+            VStack(spacing: 8) {
+                HomeFeedbackLink()
+
+                NavigationLink {
+                    PrivacyPolicyScreen()
+                } label: {
+                    Text(language.text(.privacyPolicy))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.faint)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 8)
         }
-        .background(Color.white)
+        .background(AppTheme.canvas)
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -188,16 +193,17 @@ private struct HomeTopBar: View {
     @AppStorage("app.language") private var languageRaw = ""
 
     var body: some View {
-        HStack(spacing: 11) {
-            BrandMark(size: 38)
+        HStack(spacing: 10) {
+            BrandMark(size: 34)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("LiveMix")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppTheme.ink)
                 Text(language.text(.homeTopTagline))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(AppTheme.faint)
+                    .lineLimit(1)
             }
 
             Spacer()
@@ -208,30 +214,18 @@ private struct HomeTopBar: View {
                 Text(language.toggleTitle)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppTheme.primary)
-                    .frame(width: 36, height: 36)
-                    .background(AppTheme.primarySoft, in: RoundedRectangle(cornerRadius: 8))
-            }
-            .buttonStyle(.plain)
-
-            NavigationLink {
-                LiveTemplatePickerScreen()
-            } label: {
-                HStack(spacing: 6) {
-                    Text(language.text(.start))
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.white)
-                .frame(height: 36)
-                .padding(.horizontal, 13)
-                .background(AppTheme.primary, in: RoundedRectangle(cornerRadius: 8))
+                    .frame(width: 38, height: 34)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(AppTheme.border, lineWidth: 1)
+                    }
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(Color.white.opacity(0.96))
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .background(AppTheme.canvas.opacity(0.98))
     }
 }
 
@@ -239,41 +233,34 @@ private struct HomeLiveEntryCard: View {
     @Environment(\.appLanguage) private var language
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "livephoto")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppTheme.primary)
-                        Text(language.text(.liveEntryTitle))
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(AppTheme.ink)
-                    }
+        HStack(spacing: 14) {
+            Image(systemName: "livephoto")
+                .font(.system(size: 21, weight: .semibold))
+                .foregroundStyle(AppTheme.primary)
+                .frame(width: 48, height: 48)
+                .background(AppTheme.primarySoft, in: RoundedRectangle(cornerRadius: 8))
 
-                    Text(language.text(.liveEntrySubtitle))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(AppTheme.muted)
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 10)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppTheme.primary)
-                    .frame(width: 30, height: 30)
-                    .background(AppTheme.primarySoft, in: RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(language.text(.liveEntryTitle))
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink)
+                Text(language.text(.liveEntrySubtitle))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppTheme.muted)
+                    .lineLimit(2)
             }
 
-            HomeLiveTemplateMosaic()
-                .frame(height: 118)
+            Spacer(minLength: 8)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppTheme.faint)
         }
-        .padding(14)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(16)
+        .frame(minHeight: 82)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         }
     }
@@ -283,39 +270,34 @@ private struct HomeImageEntryCard: View {
     @Environment(\.appLanguage) private var language
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "square.grid.3x3")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppTheme.primary)
-                        Text(language.text(.imageEntryTitle))
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(AppTheme.ink)
-                    }
+        HStack(spacing: 14) {
+            Image(systemName: "square.grid.3x3")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 48, height: 48)
+                .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 8))
 
-                    Text(language.text(.imageEntrySubtitle))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(AppTheme.muted)
-                }
-
-                Spacer(minLength: 10)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppTheme.primary)
-                    .frame(width: 30, height: 30)
-                    .background(AppTheme.primarySoft, in: RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(language.text(.imageEntryTitle))
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink)
+                Text(language.text(.imageEntrySubtitle))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppTheme.muted)
+                    .lineLimit(2)
             }
 
-            HomeImageModePreview()
-                .frame(height: 94)
+            Spacer(minLength: 8)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppTheme.faint)
         }
-        .padding(14)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(16)
+        .frame(minHeight: 82)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         }
     }
@@ -528,14 +510,16 @@ private struct PageTopBar<Trailing: View>: View {
             Button {
                 dismiss()
             } label: {
-                Text(backLabel)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppTheme.faint)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-                    .frame(minHeight: 40)
-                    .padding(.horizontal, 12)
-                    .background(AppTheme.surface, in: Capsule())
+                HStack(spacing: 5) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(backLabel.replacingOccurrences(of: "← ", with: ""))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppTheme.muted)
+                .frame(minHeight: 40)
             }
             .buttonStyle(.plain)
 
@@ -543,9 +527,9 @@ private struct PageTopBar<Trailing: View>: View {
 
             trailing()
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(Color.white.opacity(0.96))
+        .padding(.horizontal, 18)
+        .padding(.vertical, 8)
+        .background(AppTheme.canvas.opacity(0.98))
     }
 }
 
@@ -561,7 +545,10 @@ private struct Badge: View {
             .minimumScaleFactor(0.8)
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
-            .background(tone == .primary ? AppTheme.primarySoft : AppTheme.surface, in: Capsule())
+            .background(
+                tone == .primary ? AppTheme.primarySoft : AppTheme.surface,
+                in: RoundedRectangle(cornerRadius: 7)
+            )
     }
 }
 
@@ -638,9 +625,9 @@ private struct LiveTemplatePickerScreen: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(language.text(.templatesTitle))
-                            .font(.system(size: 30, weight: .semibold))
+                            .font(.system(size: 26, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
@@ -661,12 +648,12 @@ private struct LiveTemplatePickerScreen: View {
                         }
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
+                .padding(.horizontal, 18)
+                .padding(.top, 10)
                 .padding(.bottom, 32)
             }
         }
-        .background(Color.white)
+        .background(AppTheme.canvas)
         .toolbar(.hidden, for: .navigationBar)
     }
 }
@@ -677,9 +664,9 @@ private struct TemplateCard: View {
     let template: NativeCollageTemplate
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 9) {
             TemplateMiniPreview(template: template)
-                .frame(height: 96)
+                .frame(height: 82)
                 .background(AppTheme.raised, in: RoundedRectangle(cornerRadius: 8))
 
             VStack(alignment: .leading, spacing: 5) {
@@ -705,10 +692,10 @@ private struct TemplateCard: View {
                     .minimumScaleFactor(0.8)
             }
         }
-        .padding(12)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+        .padding(10)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
         .overlay {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 8)
                 .stroke(AppTheme.border, lineWidth: 1)
         }
     }
@@ -719,6 +706,10 @@ private struct LiveComposerScreen: View {
 
     let template: NativeCollageTemplate
 
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "LiveMix",
+        category: "LivePhotoComposer"
+    )
     private let composer = NativeLivePhotoComposer()
 
     @State private var replacementPickerItem: PhotosPickerItem?
@@ -747,12 +738,9 @@ private struct LiveComposerScreen: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text(language.liveEditorKicker(template: template))
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AppTheme.primary)
+                    VStack(alignment: .leading, spacing: 5) {
                         Text(language.text(.fillVideosTitle))
-                            .font(.system(size: 24, weight: .semibold))
+                            .font(.system(size: 22, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                         Text(language.text(.fillVideosSubtitle))
                             .font(.system(size: 14))
@@ -786,13 +774,15 @@ private struct LiveComposerScreen: View {
                         .frame(maxWidth: 390)
                         .frame(maxWidth: .infinity)
 
-                        NativeSlotSelector(
-                            totalCount: template.slots.count,
-                            activeSlot: activeSlot,
-                            previews: videoPreviews,
-                            loadingSlots: loadingSlots
-                        ) { index in
-                            activeSlot = index
+                        if template.slots.count > 1 {
+                            NativeSlotSelector(
+                                totalCount: template.slots.count,
+                                activeSlot: activeSlot,
+                                previews: videoPreviews,
+                                loadingSlots: loadingSlots
+                            ) { index in
+                                activeSlot = index
+                            }
                         }
                     }
 
@@ -830,7 +820,8 @@ private struct LiveComposerScreen: View {
                         replacementPickerItem: $replacementPickerItem
                     )
                 }
-                .padding(16)
+                .padding(.horizontal, 18)
+                .padding(.top, 10)
                 .padding(.bottom, 86)
             }
 
@@ -849,7 +840,7 @@ private struct LiveComposerScreen: View {
                         .padding(.horizontal, 12)
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
-                        .background(canGenerate ? AppTheme.primary : AppTheme.raised, in: RoundedRectangle(cornerRadius: 12))
+                        .background(canGenerate ? AppTheme.primary : AppTheme.raised, in: RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
                 .disabled(!canGenerate)
@@ -859,7 +850,7 @@ private struct LiveComposerScreen: View {
             }
             .background(.regularMaterial)
         }
-        .background(Color.white)
+        .background(AppTheme.canvas)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $isResultPresented) {
             if let liveDraft {
@@ -991,7 +982,12 @@ private struct LiveComposerScreen: View {
             loadingSlots.remove(slot)
             normalizeAllEditsForLoadedDurations()
             if loadingSlots.isEmpty && filledCount > 0 {
-                message = filledCount == template.slots.count ? .ready : .selectedVideos(filledCount)
+                switch message {
+                case .unreadableVideo, .videoTooLong:
+                    break
+                default:
+                    message = filledCount == template.slots.count ? .ready : .selectedVideos(filledCount)
+                }
             }
         }
 
@@ -999,7 +995,17 @@ private struct LiveComposerScreen: View {
             let preview = try await Self.makeVideoPreview(for: item)
             clearPreview(at: slot)
             videoPreviews[slot] = preview
+        } catch NativeVideoPreviewLoadError.durationTooLong {
+            Self.logger.notice(
+                "Rejected video longer than \(NativeVideoInputLimits.maximumDuration, privacy: .public) seconds"
+            )
+            selectedItems[slot] = nil
+            clearPreview(at: slot)
+            message = .videoTooLong(slot)
         } catch {
+            Self.logger.error(
+                "Video preview failed for slot \(slot + 1): \(String(reflecting: error), privacy: .public)"
+            )
             selectedItems[slot] = nil
             clearPreview(at: slot)
             message = .unreadableVideo(slot)
@@ -1007,16 +1013,30 @@ private struct LiveComposerScreen: View {
     }
 
     private static func makeVideoPreview(for item: PhotosPickerItem) async throws -> NativeVideoPreview {
-        try await withThrowingTaskGroup(of: NativeVideoPreview.self) { group in
+        if let duration = photoLibraryDuration(for: item) {
+            try validateVideoDuration(duration)
+        }
+
+        return try await withThrowingTaskGroup(of: NativeVideoPreview.self) { group in
             group.addTask {
                 guard let pickedVideo = try await item.loadTransferable(type: PickedVideo.self) else {
                     throw NativeLivePhotoComposerError.unreadableVideo
                 }
-                return await NativeVideoMetadataLoader.preview(for: pickedVideo.url)
+                let preview = await NativeVideoMetadataLoader.preview(for: pickedVideo.url)
+                do {
+                    guard let duration = preview.duration else {
+                        throw NativeLivePhotoComposerError.unreadableVideo
+                    }
+                    try validateVideoDuration(duration)
+                    return preview
+                } catch {
+                    try? FileManager.default.removeItem(at: preview.url)
+                    throw error
+                }
             }
 
             group.addTask {
-                try await Task.sleep(nanoseconds: 20_000_000_000)
+                try await Task.sleep(nanoseconds: 90_000_000_000)
                 throw NativeVideoPreviewLoadError.timeout
             }
 
@@ -1025,6 +1045,22 @@ private struct LiveComposerScreen: View {
             }
             group.cancelAll()
             return preview
+        }
+    }
+
+    private static func photoLibraryDuration(for item: PhotosPickerItem) -> Double? {
+        guard let itemIdentifier = item.itemIdentifier else { return nil }
+        let assets = PHAsset.fetchAssets(withLocalIdentifiers: [itemIdentifier], options: nil)
+        guard let asset = assets.firstObject, asset.mediaType == .video else { return nil }
+        return asset.duration
+    }
+
+    nonisolated private static func validateVideoDuration(_ duration: Double) throws {
+        guard duration.isFinite, duration > 0 else {
+            throw NativeLivePhotoComposerError.unreadableVideo
+        }
+        guard duration <= NativeVideoInputLimits.maximumDuration else {
+            throw NativeVideoPreviewLoadError.durationTooLong
         }
     }
 
@@ -1092,6 +1128,9 @@ private struct LiveComposerScreen: View {
             isResultPresented = true
             message = .generated
         } catch {
+            Self.logger.error(
+                "Live Photo generation failed: \(String(reflecting: error), privacy: .public)"
+            )
             message = .failed
         }
     }
@@ -1102,6 +1141,7 @@ private enum LiveComposerMessage: Hashable {
     case loadingVideo
     case loadingVideos(Int)
     case unreadableVideo(Int)
+    case videoTooLong(Int)
     case ready
     case selectedVideos(Int)
     case needAllVideos
@@ -1119,6 +1159,11 @@ private enum LiveComposerMessage: Hashable {
             return language.loadingVideos(count)
         case .unreadableVideo(let index):
             return language.unreadableVideo(index)
+        case .videoTooLong(let index):
+            return language.videoTooLong(
+                index,
+                maximumDuration: Int(NativeVideoInputLimits.maximumDuration)
+            )
         case .ready:
             return language.text(.liveReadyMessage)
         case .selectedVideos(let count):
@@ -1200,10 +1245,10 @@ private struct LiveUploadPreview: View {
             }
         }
         .aspectRatio(1, contentMode: .fit)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 8)
                 .stroke(AppTheme.border, lineWidth: 1)
         }
     }
@@ -1250,12 +1295,12 @@ private struct LiveUploadSlot: View {
 
     private let cornerRadius: CGFloat = 0
     private let emptySlotTints = [
-        AppTheme.primarySoft,
-        AppTheme.accentSoft,
-        Color(red: 0.88, green: 0.97, blue: 0.94),
-        Color(red: 1.00, green: 0.95, blue: 0.84),
-        Color(red: 0.96, green: 0.91, blue: 1.00),
-        Color(red: 1.00, green: 0.92, blue: 0.88),
+        Color(red: 0.91, green: 0.94, blue: 0.93),
+        Color(red: 0.92, green: 0.94, blue: 0.97),
+        Color(red: 0.94, green: 0.94, blue: 0.91),
+        Color(red: 0.92, green: 0.95, blue: 0.94),
+        Color(red: 0.94, green: 0.93, blue: 0.96),
+        Color(red: 0.95, green: 0.93, blue: 0.91),
     ]
     private let emptySlotAccents = [
         AppTheme.primary,
@@ -1278,6 +1323,7 @@ private struct LiveUploadSlot: View {
         .overlay {
             slotBorder
         }
+        .animation(.easeOut(duration: 0.16), value: isActive)
     }
 
     @ViewBuilder
@@ -1317,16 +1363,18 @@ private struct LiveUploadSlot: View {
                     }
                 ),
                 maxSelectionCount: maxSelectionCount,
-                matching: .videos
+                matching: .videos,
+                preferredItemEncoding: .compatible
             ) {
                 ZStack {
                     Rectangle()
                         .fill(Color.clear)
                     VStack(spacing: 8) {
-                        Text("+")
-                            .font(.system(size: 30, weight: .regular))
+                        Image(systemName: "plus")
+                            .font(.system(size: 19, weight: .semibold))
                             .foregroundStyle(emptySlotAccent)
-                            .lineLimit(1)
+                            .frame(width: 42, height: 42)
+                            .background(Color.white.opacity(0.72), in: Circle())
                         Text(language.addVideo(slot.id))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
@@ -1347,18 +1395,20 @@ private struct LiveUploadSlot: View {
     }
 
     private var slotBorder: some View {
-        Group {
-            if isLoading {
-                Color.white.opacity(0.18)
-            } else if isActive && preview != nil {
-                AppTheme.primarySoft.opacity(0.16)
-            } else if isActive {
-                emptySlotAccent.opacity(0.10)
-            } else {
-                Color.clear
-            }
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .strokeBorder(slotBorderColor, lineWidth: isActive ? 2.5 : 1)
+            .padding(isActive ? 1 : 0)
+            .allowsHitTesting(false)
+    }
+
+    private var slotBorderColor: Color {
+        if isLoading {
+            return Color.white.opacity(0.42)
         }
-        .allowsHitTesting(false)
+        if isActive {
+            return preview == nil ? emptySlotAccent : AppTheme.primary
+        }
+        return preview == nil ? Color.clear : Color.white.opacity(0.14)
     }
 
     private var emptySlotTint: Color {
@@ -1389,17 +1439,6 @@ private struct LiveUploadSlot: View {
                         Spacer()
                     }
                     Spacer()
-                    if isActive && edit.fitMode == .fill {
-                        HStack {
-                            Text(language.text(.dragToAdjust))
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(AppTheme.ink)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.white.opacity(0.92), in: Capsule())
-                            Spacer()
-                        }
-                    }
                 }
                 .padding(8)
             }
@@ -1572,9 +1611,9 @@ private struct NativeSlotSelector: View {
                         .frame(width: 78, alignment: .leading)
                         .padding(.horizontal, 10)
                         .frame(height: 44)
-                        .background(isActive ? AppTheme.primarySoft : Color.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(isActive ? AppTheme.primarySoft : Color.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         .overlay {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
                                 .strokeBorder(isActive ? AppTheme.primary : AppTheme.border, lineWidth: isActive ? 2 : 1)
                         }
                     }
@@ -1639,7 +1678,11 @@ private struct NativeLiveEditControls: View {
                         .foregroundStyle(AppTheme.ink)
                 }
                 Spacer()
-                PhotosPicker(selection: $replacementPickerItem, matching: .videos) {
+                PhotosPicker(
+                    selection: $replacementPickerItem,
+                    matching: .videos,
+                    preferredItemEncoding: .compatible
+                ) {
                     Text(hasMedia ? language.text(.replace) : language.text(.choose))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
@@ -1667,7 +1710,7 @@ private struct NativeLiveEditControls: View {
                     }
                 }
                 .padding(4)
-                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
                 .disabled(controlsDisabled)
                 .opacity(controlsDisabled ? 0.45 : 1)
             }
@@ -1745,9 +1788,9 @@ private struct NativeLiveEditControls: View {
                 .foregroundStyle(AppTheme.faint)
         }
         .padding(14)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
         .overlay {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 8)
                 .stroke(AppTheme.border, lineWidth: 1)
         }
     }
@@ -1901,11 +1944,6 @@ private struct LiveResultScreen: View {
         .toolbar(.visible, for: .navigationBar)
         .navigationTitle(language.text(.preview))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Badge(text: language.text(.generated), tone: .neutral)
-            }
-        }
     }
 
     @MainActor
@@ -1938,6 +1976,11 @@ private struct LiveResultScreen: View {
 }
 
 private struct LivePhotoPreview: UIViewRepresentable {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "LiveMix",
+        category: "LivePhotoPreview"
+    )
+
     let imageURL: URL
     let videoURL: URL
 
@@ -2003,7 +2046,17 @@ private struct LivePhotoPreview: UIViewRepresentable {
             ) { [weak view] livePhoto, info in
                 guard let view else { return }
                 if let cancelled = info[PHLivePhotoInfoCancelledKey] as? Bool, cancelled {
+                    LivePhotoPreview.logger.notice("Live Photo preview request was cancelled")
                     return
+                }
+                if let error = info[PHLivePhotoInfoErrorKey] as? Error {
+                    LivePhotoPreview.logger.error(
+                        "Live Photo preview request failed: \(String(reflecting: error), privacy: .public)"
+                    )
+                } else if livePhoto == nil {
+                    LivePhotoPreview.logger.warning("Live Photo preview returned no error and no Live Photo")
+                } else {
+                    LivePhotoPreview.logger.info("Live Photo preview loaded")
                 }
                 view.livePhoto = livePhoto
             }
@@ -2053,9 +2106,9 @@ private struct ImageToolPickerScreen: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(language.text(.imageToolsTitle))
-                            .font(.system(size: 30, weight: .semibold))
+                            .font(.system(size: 26, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
@@ -2100,12 +2153,12 @@ private struct ImageToolPickerScreen: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
+                .padding(.horizontal, 18)
+                .padding(.top, 10)
                 .padding(.bottom, 32)
             }
         }
-        .background(Color.white)
+        .background(AppTheme.canvas)
         .toolbar(.hidden, for: .navigationBar)
     }
 }
@@ -2160,9 +2213,9 @@ private struct ImageToolCard: View {
             }
         }
         .padding(12)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
         .overlay {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 8)
                 .stroke(AppTheme.border, lineWidth: 1)
         }
     }
@@ -2870,11 +2923,6 @@ private struct ImageResultScreen: View {
         .toolbar(.visible, for: .navigationBar)
         .navigationTitle(language.text(.preview))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Badge(text: language.text(.generated), tone: .neutral)
-            }
-        }
     }
 
     @MainActor
@@ -2967,11 +3015,6 @@ private struct SplitNineResultScreen: View {
         .toolbar(.visible, for: .navigationBar)
         .navigationTitle(language.text(.preview))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Badge(text: language.text(.generated), tone: .neutral)
-            }
-        }
     }
 
     @MainActor
@@ -3039,14 +3082,20 @@ private struct TemplateMiniPreview: View {
     let template: NativeCollageTemplate
 
     private let slotInset: CGFloat = 2
+    private let slotColors = [
+        AppTheme.primary,
+        AppTheme.accent,
+        Color(red: 0.86, green: 0.58, blue: 0.20),
+        Color(red: 0.36, green: 0.62, blue: 0.54),
+    ]
 
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                Color.white
+                AppTheme.surface
                 ForEach(template.slots) { slot in
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(slot.id == 0 ? AppTheme.primary : slot.id == 1 ? AppTheme.accent.opacity(0.28) : AppTheme.primary.opacity(0.16))
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(slotColors[max(0, slot.id) % slotColors.count])
                         .frame(
                             width: max(proxy.size.width * slot.width - slotInset * 2, 1),
                             height: max(proxy.size.height * slot.height - slotInset * 2, 1)
@@ -3058,8 +3107,8 @@ private struct TemplateMiniPreview: View {
                 }
             }
         }
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -3847,6 +3896,11 @@ private enum PhotoLibraryOpener {
 }
 
 private enum PhotoSaver {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "LiveMix",
+        category: "PhotoSaver"
+    )
+
     static func save(image: UIImage) async throws {
         let authorized = await requestAuthorization()
         guard authorized else {
@@ -3869,8 +3923,13 @@ private enum PhotoSaver {
     static func saveLivePhoto(imageURL: URL, videoURL: URL) async throws {
         let authorized = await requestAuthorization()
         guard authorized else {
+            logger.error("Live Photo save denied because Photos authorization is unavailable")
             throw PhotoSaveError.permissionDenied
         }
+
+        logger.info(
+            "Saving Live Photo: imageBytes=\(fileSize(at: imageURL)), videoBytes=\(fileSize(at: videoURL))"
+        )
 
         try await withCheckedThrowingContinuation { continuation in
             PHPhotoLibrary.shared().performChanges {
@@ -3886,12 +3945,21 @@ private enum PhotoSaver {
                 request.addResource(with: .pairedVideo, fileURL: videoURL, options: videoOptions)
             } completionHandler: { success, error in
                 if success {
+                    logger.info("Photos accepted the Live Photo resources")
                     continuation.resume()
                 } else {
+                    logger.error(
+                        "Photos rejected the Live Photo resources: \(String(reflecting: error), privacy: .public)"
+                    )
                     continuation.resume(throwing: error ?? PhotoSaveError.writeFailed)
                 }
             }
         }
+    }
+
+    private static func fileSize(at url: URL) -> Int64 {
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+        return Int64(values?.fileSize ?? 0)
     }
 
     private static func requestAuthorization() async -> Bool {
