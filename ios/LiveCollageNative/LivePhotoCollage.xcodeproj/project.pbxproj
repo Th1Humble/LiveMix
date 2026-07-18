@@ -18,7 +18,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0E4E8B702D20000100100001 /* LivePhotoCollage.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LivePhotoCollage.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0E4E8B702D20000100100001 /* LiveMix.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LiveMix.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0E4E8B792D20000100100001 /* LivePhotoCollageApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePhotoCollageApp.swift; sourceTree = "<group>"; };
 		0E4E8B7B2D20000100100001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		0E4E8B7D2D20000100100001 /* ImageCollageRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCollageRenderer.swift; sourceTree = "<group>"; };
@@ -53,7 +53,7 @@
 		0E4E8B712D20000100100001 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				0E4E8B702D20000100100001 /* LivePhotoCollage.app */,
+				0E4E8B702D20000100100001 /* LiveMix.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -77,9 +77,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		0E4E8B6F2D20000100100001 /* LivePhotoCollage */ = {
+		0E4E8B6F2D20000100100001 /* LiveMix */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 0E4E8B772D20000100100001 /* Build configuration list for PBXNativeTarget "LivePhotoCollage" */;
+			buildConfigurationList = 0E4E8B772D20000100100001 /* Build configuration list for PBXNativeTarget "LiveMix" */;
 			buildPhases = (
 				0E4E8B6C2D20000100100001 /* Sources */,
 				0E4E8B6D2D20000100100001 /* Frameworks */,
@@ -89,9 +89,9 @@
 			);
 			dependencies = (
 			);
-			name = LivePhotoCollage;
-			productName = LivePhotoCollage;
-			productReference = 0E4E8B702D20000100100001 /* LivePhotoCollage.app */;
+			name = LiveMix;
+			productName = LiveMix;
+			productReference = 0E4E8B702D20000100100001 /* LiveMix.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -124,7 +124,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				0E4E8B6F2D20000100100001 /* LivePhotoCollage */,
+				0E4E8B6F2D20000100100001 /* LiveMix */,
 			);
 		};
 /* End PBXProject section */
@@ -345,7 +345,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		0E4E8B772D20000100100001 /* Build configuration list for PBXNativeTarget "LivePhotoCollage" */ = {
+		0E4E8B772D20000100100001 /* Build configuration list for PBXNativeTarget "LiveMix" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				0E4E8B752D20000100100001 /* Debug */,

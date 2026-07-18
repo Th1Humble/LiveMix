@@ -13,6 +13,7 @@ struct CollageCoreTests {
         testNativeVideoRenderLayoutRendersEachClipAtSlotSizeBeforeOverlay()
         testNativeVideoRenderLayoutNormalizesPortraitTransforms()
         testNativeVideoRenderLayoutNormalizesTranslatedMirrors()
+        testSingleVideoOutputSizePreservesSourceAspectRatio()
         testSliderRangeExpandsDegenerateBounds()
         testNativeImageEditClampsToImageEditorBounds()
         testNativeImageEditDragUpdatesFocalPoint()
@@ -151,6 +152,27 @@ struct CollageCoreTests {
         expect(renderedBounds.size == geometry?.size, "mirrored bounds should stay inside the render canvas")
     }
 
+    private static func testSingleVideoOutputSizePreservesSourceAspectRatio() {
+        let landscape = NativeVideoRenderLayout.singleVideoOutputSize(
+            for: CGSize(width: 3840, height: 2160)
+        )
+        let portrait = NativeVideoRenderLayout.singleVideoOutputSize(
+            for: CGSize(width: 1080, height: 1920)
+        )
+        let smaller = NativeVideoRenderLayout.singleVideoOutputSize(
+            for: CGSize(width: 1280, height: 720)
+        )
+        let oddDimensions = NativeVideoRenderLayout.singleVideoOutputSize(
+            for: CGSize(width: 853, height: 1281)
+        )
+
+        expect(landscape == CGSize(width: 1920, height: 1080), "4K landscape video should scale down to a 1920 long edge")
+        expect(portrait == CGSize(width: 1080, height: 1920), "portrait video should preserve its display orientation")
+        expect(smaller == CGSize(width: 1280, height: 720), "smaller videos should not be upscaled")
+        expect(oddDimensions == CGSize(width: 852, height: 1280), "video output dimensions should be even for encoding")
+        expect(NativeVideoRenderLayout.singleVideoOutputSize(for: .zero) == nil, "invalid source sizes should be rejected")
+    }
+
     private static func testSliderRangeExpandsDegenerateBounds() {
         let startRange = NativeSliderBounds.resolvedRange(lower: 0, upper: 0, step: 0.05)
         let durationRange = NativeSliderBounds.resolvedRange(lower: 0.5, upper: 0.5, step: 0.05)
@@ -223,15 +245,25 @@ struct CollageCoreTests {
     }
 
     private static func testImageJoinOutputUsesSingleCanvas() {
-        let horizontal = ImageJoinLayout.outputSize(for: 8, mode: .horizontal, tileSize: 3240)
-        let vertical = ImageJoinLayout.outputSize(for: 8, mode: .vertical, tileSize: 3240)
-        let horizontalLastTile = ImageJoinLayout.tileRect(index: 7, imageCount: 8, mode: .horizontal, tileSize: 3240)
-        let verticalLastTile = ImageJoinLayout.tileRect(index: 7, imageCount: 8, mode: .vertical, tileSize: 3240)
+        let horizontal = ImageJoinLayout.outputSize(for: 8, mode: .horizontal, canvasStyle: .square, tileSize: 3240)
+        let vertical = ImageJoinLayout.outputSize(for: 8, mode: .vertical, canvasStyle: .square, tileSize: 3240)
+        let horizontalLastTile = ImageJoinLayout.tileRect(index: 7, imageCount: 8, mode: .horizontal, canvasStyle: .square, tileSize: 3240)
+        let verticalLastTile = ImageJoinLayout.tileRect(index: 7, imageCount: 8, mode: .vertical, canvasStyle: .square, tileSize: 3240)
+        let longHorizontal = ImageJoinLayout.outputSize(for: 8, mode: .horizontal, canvasStyle: .long, tileSize: 1080)
+        let longVertical = ImageJoinLayout.outputSize(for: 8, mode: .vertical, canvasStyle: .long, tileSize: 1080)
+        let longHorizontalLastTile = ImageJoinLayout.tileRect(index: 7, imageCount: 8, mode: .horizontal, canvasStyle: .long, tileSize: 1080)
+        let longVerticalLastTile = ImageJoinLayout.tileRect(index: 7, imageCount: 8, mode: .vertical, canvasStyle: .long, tileSize: 1080)
 
         expect(horizontal == CGSize(width: 3240, height: 3240), "horizontal join should export one square canvas split into columns")
         expect(vertical == CGSize(width: 3240, height: 3240), "vertical join should export one square canvas split into rows")
         expect(horizontalLastTile == CGRect(x: 2835, y: 0, width: 405, height: 3240), "last horizontal tile should occupy the last square-canvas column")
         expect(verticalLastTile == CGRect(x: 0, y: 2835, width: 3240, height: 405), "last vertical tile should occupy the last square-canvas row")
+        expect(longHorizontal == CGSize(width: 8640, height: 1080), "horizontal long canvas should extend by one tile per image")
+        expect(longVertical == CGSize(width: 1080, height: 8640), "vertical long canvas should extend by one tile per image")
+        expect(longHorizontalLastTile == CGRect(x: 7560, y: 0, width: 1080, height: 1080), "horizontal long canvas should keep square tiles")
+        expect(longVerticalLastTile == CGRect(x: 0, y: 7560, width: 1080, height: 1080), "vertical long canvas should keep square tiles")
+        expect(ImageJoinLayout.liveOutputSize(for: 9, mode: .vertical, canvasStyle: .long) == CGSize(width: 426, height: 3834), "Live Photo long canvas should cap and align its longest edge")
+        expect(ImageJoinLayout.liveOutputSize(for: 3, mode: .vertical, canvasStyle: .square) == CGSize(width: 1080, height: 1080), "Live Photo square canvas should remain 1080 square")
     }
 
     private static func testImageJoinLiveTemplateMatchesImageJoinLayout() {
@@ -268,6 +300,14 @@ struct CollageCoreTests {
         expect(AppLanguage.en.text(.liveEntrySubtitle) == "Create Live Photos", "English live entry subtitle should stay concise")
         expect(AppLanguage.zhHans.videoTooLong(0, maximumDuration: 5) == "视频 1 超过 5 秒，请先裁剪后再选择。", "Chinese duration-limit feedback should identify the slot")
         expect(AppLanguage.en.videoTooLong(1, maximumDuration: 5) == "Video 2 is longer than 5 seconds. Trim it before selecting.", "English duration-limit feedback should identify the slot")
+        expect(AppLanguage.zhHans.videoDurationLimit(5) == "仅支持 5 秒以内的视频", "Chinese video picker should show the duration limit before selection")
+        expect(AppLanguage.en.videoDurationLimit(5) == "Videos must be 5 seconds or shorter", "English video picker should show the duration limit before selection")
+        expect(AppLanguage.zhHans.text(.videoTooLongTitle) == "视频时长超出限制", "Chinese duration alert title should be explicit")
+        expect(AppLanguage.en.text(.chooseAnotherVideo) == "Choose Another", "English duration alert action should be localized")
+        expect(ImageJoinCanvasStyle.long.localizedTitle(.zhHans) == "长图", "Chinese long canvas option should be localized")
+        expect(ImageJoinCanvasStyle.square.localizedTitle(.en) == "Square", "English square canvas option should be localized")
+        expect(SingleVideoCanvasStyle.original.localizedTitle(.zhHans) == "原视频", "Chinese original video ratio option should be localized")
+        expect(SingleVideoCanvasStyle.square.localizedTitle(.en) == "1:1", "square video ratio option should be language independent")
         expect(AppLanguage.zhHans.next == .en, "Chinese toggle should switch to English")
         expect(AppLanguage.en.next == .zhHans, "English toggle should switch to Chinese")
 

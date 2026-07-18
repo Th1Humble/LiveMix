@@ -78,6 +78,13 @@ enum AppLanguage: String, CaseIterable, Hashable {
         return "Video \(index + 1) is longer than \(maximumDuration) seconds. Trim it before selecting."
     }
 
+    func videoDurationLimit(_ maximumDuration: Int) -> String {
+        if self == .zhHans {
+            return "仅支持 \(maximumDuration) 秒以内的视频"
+        }
+        return "Videos must be \(maximumDuration) seconds or shorter"
+    }
+
     func liveEditorKicker(template: NativeCollageTemplate) -> String {
         if self == .zhHans {
             return "\(template.localizedName(self))模板 · \(clipCount(template.slots.count))素材"
@@ -171,11 +178,14 @@ enum AppText: String, CaseIterable {
     case backImageCollage
     case templatesTitle
     case templatesSubtitle
-    case localOnlyMessage
     case fillVideosTitle
     case fillVideosSubtitle
     case generating
     case loadingVideo
+    case videoTooLongTitle
+    case chooseAnotherVideo
+    case videoCanvasStyle
+    case canvasStyle
     case generateLivePhoto
     case loading
     case dragToAdjust
@@ -284,11 +294,14 @@ enum AppStrings {
         .backImageCollage: "← 图片拼接",
         .templatesTitle: "选择模板",
         .templatesSubtitle: "先选画面结构，再放视频。",
-        .localOnlyMessage: "当前版本会在本机合成，不上传服务端。",
         .fillVideosTitle: "选择视频并调整画面",
         .fillVideosSubtitle: "选中槽位后调整画面和片段。",
         .generating: "正在生成",
         .loadingVideo: "正在读取视频",
+        .videoTooLongTitle: "视频时长超出限制",
+        .chooseAnotherVideo: "重新选择",
+        .videoCanvasStyle: "画面比例",
+        .canvasStyle: "画布",
         .generateLivePhoto: "生成 Live Photo",
         .loading: "正在读取",
         .dragToAdjust: "拖动调整",
@@ -396,11 +409,14 @@ enum AppStrings {
         .backImageCollage: "← Images",
         .templatesTitle: "Choose Layout",
         .templatesSubtitle: "Pick a structure, then add videos.",
-        .localOnlyMessage: "Everything is processed on this iPhone.",
         .fillVideosTitle: "Choose video and adjust",
         .fillVideosSubtitle: "Tune each slot's framing and timing.",
         .generating: "Generating",
         .loadingVideo: "Loading video",
+        .videoTooLongTitle: "Video Is Too Long",
+        .chooseAnotherVideo: "Choose Another",
+        .videoCanvasStyle: "Aspect Ratio",
+        .canvasStyle: "Canvas",
         .generateLivePhoto: "Generate Live Photo",
         .loading: "Loading",
         .dragToAdjust: "Drag to adjust",
@@ -929,6 +945,30 @@ struct NativeImageEdit: Hashable {
 }
 
 enum NativeVideoRenderLayout {
+    static let singleVideoMaximumLongEdge: CGFloat = 1920
+
+    static func singleVideoOutputSize(
+        for sourceSize: CGSize,
+        maximumLongEdge: CGFloat = singleVideoMaximumLongEdge
+    ) -> CGSize? {
+        guard sourceSize.width.isFinite,
+              sourceSize.height.isFinite,
+              sourceSize.width > 0,
+              sourceSize.height > 0,
+              maximumLongEdge.isFinite,
+              maximumLongEdge > 0 else {
+            return nil
+        }
+
+        let scale = min(1, maximumLongEdge / max(sourceSize.width, sourceSize.height))
+        let scaledWidth = sourceSize.width * scale
+        let scaledHeight = sourceSize.height * scale
+        return CGSize(
+            width: max(2, floor(scaledWidth / 2) * 2),
+            height: max(2, floor(scaledHeight / 2) * 2)
+        )
+    }
+
     static func orientedGeometry(
         naturalSize: CGSize,
         preferredTransform: CGAffineTransform
@@ -1010,6 +1050,22 @@ enum NativeVideoRenderLayout {
     }
 }
 
+enum SingleVideoCanvasStyle: String, CaseIterable, Identifiable {
+    case original
+    case square
+
+    var id: String { rawValue }
+
+    func localizedTitle(_ language: AppLanguage) -> String {
+        switch self {
+        case .original:
+            return language == .zhHans ? "原视频" : "Original"
+        case .square:
+            return "1:1"
+        }
+    }
+}
+
 enum ImageJoinMode: String, CaseIterable, Identifiable {
     case horizontal
     case vertical
@@ -1035,16 +1091,61 @@ enum ImageJoinMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum ImageJoinCanvasStyle: String, CaseIterable, Identifiable {
+    case long
+    case square
+
+    var id: String { rawValue }
+
+    func localizedTitle(_ language: AppLanguage) -> String {
+        switch self {
+        case .long:
+            return language == .zhHans ? "长图" : "Long"
+        case .square:
+            return language == .zhHans ? "方形" : "Square"
+        }
+    }
+}
+
 enum ImageJoinLayout {
     static let maxPreviewCount = 9
+    static let longImageTileSize: CGFloat = 1080
+    static let squareImageCanvasSize: CGFloat = 3240
+    static let liveSquareCanvasSize: CGFloat = 1080
+    static let liveMaximumLongEdge: CGFloat = 3840
 
-    static func outputSize(for imageCount: Int, mode: ImageJoinMode, tileSize: CGFloat) -> CGSize {
-        CGSize(width: tileSize, height: tileSize)
+    static func outputSize(
+        for imageCount: Int,
+        mode: ImageJoinMode,
+        canvasStyle: ImageJoinCanvasStyle,
+        tileSize: CGFloat
+    ) -> CGSize {
+        let count = CGFloat(resolvedCount(imageCount))
+        switch canvasStyle {
+        case .square:
+            return CGSize(width: tileSize, height: tileSize)
+        case .long:
+            return mode == .horizontal
+                ? CGSize(width: tileSize * count, height: tileSize)
+                : CGSize(width: tileSize, height: tileSize * count)
+        }
     }
 
-    static func tileRect(index: Int, imageCount: Int, mode: ImageJoinMode, tileSize: CGFloat) -> CGRect {
-        let count = max(1, min(maxPreviewCount, imageCount))
+    static func tileRect(
+        index: Int,
+        imageCount: Int,
+        mode: ImageJoinMode,
+        canvasStyle: ImageJoinCanvasStyle,
+        tileSize: CGFloat
+    ) -> CGRect {
+        let count = resolvedCount(imageCount)
         let safeIndex = max(0, min(index, count - 1))
+
+        if canvasStyle == .long {
+            return mode == .horizontal
+                ? CGRect(x: CGFloat(safeIndex) * tileSize, y: 0, width: tileSize, height: tileSize)
+                : CGRect(x: 0, y: CGFloat(safeIndex) * tileSize, width: tileSize, height: tileSize)
+        }
 
         switch mode {
         case .horizontal:
@@ -1060,8 +1161,32 @@ enum ImageJoinLayout {
         }
     }
 
+    static func liveOutputSize(
+        for imageCount: Int,
+        mode: ImageJoinMode,
+        canvasStyle: ImageJoinCanvasStyle
+    ) -> CGSize {
+        guard canvasStyle == .long else {
+            return CGSize(width: liveSquareCanvasSize, height: liveSquareCanvasSize)
+        }
+
+        let count = CGFloat(resolvedCount(imageCount))
+        let maximumTileSize = floor(liveMaximumLongEdge / count)
+        let tileSize = max(2, floor(min(liveSquareCanvasSize, maximumTileSize) / 2) * 2)
+        return outputSize(
+            for: imageCount,
+            mode: mode,
+            canvasStyle: canvasStyle,
+            tileSize: tileSize
+        )
+    }
+
+    static func tileSize(for outputSize: CGSize, mode: ImageJoinMode) -> CGFloat {
+        mode == .horizontal ? outputSize.height : outputSize.width
+    }
+
     static func previewFrames(for imageCount: Int, mode: ImageJoinMode) -> [CGRect] {
-        let count = max(1, min(maxPreviewCount, imageCount))
+        let count = resolvedCount(imageCount)
 
         return (0..<count).map { index in
             switch mode {
@@ -1092,6 +1217,10 @@ enum ImageJoinLayout {
             detail: "图片与 Live Photo 拼接",
             slots: slots
         )
+    }
+
+    private static func resolvedCount(_ imageCount: Int) -> Int {
+        max(1, min(maxPreviewCount, imageCount))
     }
 }
 

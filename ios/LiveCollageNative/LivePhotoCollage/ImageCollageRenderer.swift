@@ -1,5 +1,37 @@
 import UIKit
 
+enum ImageOrientationNormalizer {
+    static func normalized(_ image: UIImage) -> UIImage {
+        if image.imageOrientation == .up, image.scale == 1, image.cgImage != nil {
+            return image
+        }
+
+        let pixelSize: CGSize
+        if let cgImage = image.cgImage {
+            let rawSize = CGSize(width: cgImage.width, height: cgImage.height)
+            switch image.imageOrientation {
+            case .left, .leftMirrored, .right, .rightMirrored:
+                pixelSize = CGSize(width: rawSize.height, height: rawSize.width)
+            default:
+                pixelSize = rawSize
+            }
+        } else {
+            pixelSize = CGSize(
+                width: max(1, image.size.width * image.scale),
+                height: max(1, image.size.height * image.scale)
+            )
+        }
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        format.preferredRange = .standard
+        return UIGraphicsImageRenderer(size: pixelSize, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: pixelSize))
+        }
+    }
+}
+
 enum ImageCollageRenderError: Error {
     case emptyInput
     case exportFailed
@@ -10,13 +42,19 @@ enum ImageCollageRenderer {
         images: [UIImage],
         edits: [NativeImageEdit] = [],
         mode: ImageJoinMode,
+        canvasStyle: ImageJoinCanvasStyle = .square,
         tileSize: CGFloat = 1080
     ) throws -> UIImage {
         guard !images.isEmpty else {
             throw ImageCollageRenderError.emptyInput
         }
 
-        let outputSize = ImageJoinLayout.outputSize(for: images.count, mode: mode, tileSize: tileSize)
+        let outputSize = ImageJoinLayout.outputSize(
+            for: images.count,
+            mode: mode,
+            canvasStyle: canvasStyle,
+            tileSize: tileSize
+        )
         let resolvedEdits = NativeImageEdit.edits(edits, fitting: images.count)
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -32,6 +70,7 @@ enum ImageCollageRenderer {
                     index: index,
                     imageCount: images.count,
                     mode: mode,
+                    canvasStyle: canvasStyle,
                     tileSize: tileSize
                 )
                 context.cgContext.saveGState()

@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 import CoreGraphics
+import CoreImage
 import Foundation
 import OSLog
 import PhotosUI
@@ -61,7 +62,8 @@ actor NativeLivePhotoComposer {
     func compose(
         template: NativeCollageTemplate,
         videos: [NativeVideoSelection],
-        edits: [NativeSlotEdit]
+        edits: [NativeSlotEdit],
+        singleVideoCanvasStyle: SingleVideoCanvasStyle = .original
     ) async throws -> NativeLiveDraft {
         guard videos.count == template.slots.count else {
             throw NativeLivePhotoComposerError.missingVideos
@@ -69,21 +71,35 @@ actor NativeLivePhotoComposer {
 
         let pickedVideos = try await loadPickedVideos(videos)
         let sourceURLs = pickedVideos.map(\.url)
-        return try await compose(template: template, videoURLs: sourceURLs, edits: edits, shouldCleanupSourceURLs: true)
+        return try await compose(
+            template: template,
+            videoURLs: sourceURLs,
+            edits: edits,
+            singleVideoCanvasStyle: singleVideoCanvasStyle,
+            shouldCleanupSourceURLs: true
+        )
     }
 
     func compose(
         template: NativeCollageTemplate,
         videoURLs: [URL],
-        edits: [NativeSlotEdit]
+        edits: [NativeSlotEdit],
+        singleVideoCanvasStyle: SingleVideoCanvasStyle = .original
     ) async throws -> NativeLiveDraft {
-        try await compose(template: template, videoURLs: videoURLs, edits: edits, shouldCleanupSourceURLs: false)
+        try await compose(
+            template: template,
+            videoURLs: videoURLs,
+            edits: edits,
+            singleVideoCanvasStyle: singleVideoCanvasStyle,
+            shouldCleanupSourceURLs: false
+        )
     }
 
     private func compose(
         template: NativeCollageTemplate,
         videoURLs: [URL],
         edits: [NativeSlotEdit],
+        singleVideoCanvasStyle: SingleVideoCanvasStyle,
         shouldCleanupSourceURLs: Bool
     ) async throws -> NativeLiveDraft {
         guard videoURLs.count == template.slots.count else {
@@ -96,6 +112,11 @@ actor NativeLivePhotoComposer {
 
         let sourceURLs = videoURLs
         let normalizedEdits = NativeSlotEdit.edits(edits, fitting: template.slots.count)
+        let renderSize = try await NativeVideoComposer.resolvedRenderSize(
+            template: template,
+            sourceURLs: sourceURLs,
+            singleVideoCanvasStyle: singleVideoCanvasStyle
+        )
         let composedVideoURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("mov")
@@ -107,11 +128,13 @@ actor NativeLivePhotoComposer {
             sourceURLs: sourceURLs,
             template: template,
             edits: normalizedEdits,
-            outputURL: composedVideoURL
+            outputURL: composedVideoURL,
+            renderSize: renderSize
         )
         try NativeVideoComposer.extractStillFrame(
             from: composedVideoURL,
-            outputURL: stillImageURL
+            outputURL: stillImageURL,
+            maximumSize: renderSize
         )
 
         let prepared = try await LivePhotoResourceWriter.prepare(
@@ -176,7 +199,7 @@ private enum NativeVideoComposer {
         subsystem: Bundle.main.bundleIdentifier ?? "LiveMix",
         category: "VideoPipeline"
     )
-    private static let renderSize = CGSize(width: 1080, height: 1080)
+    private static let defaultRenderSize = CGSize(width: 1080, height: 1080)
     private static let maxDuration = CMTime(seconds: 3, preferredTimescale: 600)
     private static let minDuration = CMTime(seconds: 0.5, preferredTimescale: 600)
 
@@ -185,11 +208,32 @@ private enum NativeVideoComposer {
         let slotRect: CGRect
     }
 
+    static func resolvedRenderSize(
+        template: NativeCollageTemplate,
+        sourceURLs: [URL],
+        singleVideoCanvasStyle: SingleVideoCanvasStyle
+    ) async throws -> CGSize {
+        guard template.id == "video-to-live",
+              singleVideoCanvasStyle == .original,
+              let sourceURL = sourceURLs.first else {
+            return defaultRenderSize
+        }
+
+        let asset = AVURLAsset(url: sourceURL)
+        let track = try await videoTrack(for: asset)
+        let geometry = try await orientedTrackGeometry(for: track)
+        guard let outputSize = NativeVideoRenderLayout.singleVideoOutputSize(for: geometry.size) else {
+            throw NativeLivePhotoComposerError.unreadableVideo
+        }
+        return outputSize
+    }
+
     static func compose(
         sourceURLs: [URL],
         template: NativeCollageTemplate,
         edits: [NativeSlotEdit],
-        outputURL: URL
+        outputURL: URL,
+        renderSize: CGSize = defaultRenderSize
     ) async throws {
         let assets = sourceURLs.map { AVURLAsset(url: $0) }
         let normalizedEdits = NativeSlotEdit.edits(edits, fitting: template.slots.count)
@@ -216,7 +260,7 @@ private enum NativeVideoComposer {
             let maxStart = max(0, CMTimeGetSeconds(sourceTimeRange.duration) - outputSeconds)
             let edit = normalizedEdits[index].clamped(maxStart: maxStart)
 
-            let slotRect = slotRenderRect(for: template.slots[index])
+            let slotRect = slotRenderRect(for: template.slots[index], renderSize: renderSize)
             let slotURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
                 .appendingPathExtension("mov")
@@ -239,7 +283,8 @@ private enum NativeVideoComposer {
         try await composeRenderedSlots(
             renderedSlots,
             outputDuration: outputDuration,
-            outputURL: outputURL
+            outputURL: outputURL,
+            renderSize: renderSize
         )
         logger.info("Final video composed: bytes=\(fileSize(at: outputURL))")
     }
@@ -300,7 +345,8 @@ private enum NativeVideoComposer {
     private static func composeRenderedSlots(
         _ renderedSlots: [RenderedSlotVideo],
         outputDuration: CMTime,
-        outputURL: URL
+        outputURL: URL,
+        renderSize: CGSize
     ) async throws {
         let composition = AVMutableComposition()
         var layerInstructions: [AVMutableVideoCompositionLayerInstruction] = []
@@ -351,11 +397,15 @@ private enum NativeVideoComposer {
         )
     }
 
-    static func extractStillFrame(from videoURL: URL, outputURL: URL) throws {
+    static func extractStillFrame(
+        from videoURL: URL,
+        outputURL: URL,
+        maximumSize: CGSize = defaultRenderSize
+    ) throws {
         let asset = AVURLAsset(url: videoURL)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = renderSize
+        generator.maximumSize = maximumSize
 
         let cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
         let luminance = averageLuminance(of: cgImage)
@@ -466,7 +516,7 @@ private enum NativeVideoComposer {
         try await orientedTrackGeometry(for: track).transform
     }
 
-    private static func slotRenderRect(for slot: CollageSlot) -> CGRect {
+    private static func slotRenderRect(for slot: CollageSlot, renderSize: CGSize) -> CGRect {
         NativeVideoRenderLayout.slotRect(for: slot, in: renderSize)
     }
 
@@ -586,10 +636,21 @@ enum NativeVideoMetadataLoader {
         let asset = AVURLAsset(url: videoURL)
         let videoTracks = try? await asset.loadTracks(withMediaType: .video)
         let timeRange: CMTimeRange?
+        let displaySize: CGSize?
         if let videoTrack = videoTracks?.first {
             timeRange = try? await videoTrack.load(.timeRange)
+            if let naturalSize = try? await videoTrack.load(.naturalSize),
+               let preferredTransform = try? await videoTrack.load(.preferredTransform) {
+                displaySize = NativeVideoRenderLayout.orientedGeometry(
+                    naturalSize: naturalSize,
+                    preferredTransform: preferredTransform
+                )?.size
+            } else {
+                displaySize = nil
+            }
         } else {
             timeRange = nil
+            displaySize = nil
         }
         let assetDuration = try? await asset.load(.duration)
         let duration = timeRange?.duration ?? assetDuration
@@ -602,7 +663,8 @@ enum NativeVideoMetadataLoader {
             duration: duration.flatMap { time in
                 let seconds = CMTimeGetSeconds(time)
                 return seconds.isFinite ? seconds : nil
-            }
+            },
+            displaySize: displaySize
         )
     }
 
@@ -620,6 +682,7 @@ struct NativeVideoPreview: @unchecked Sendable {
     let url: URL
     let thumbnail: UIImage?
     let duration: Double?
+    let displaySize: CGSize?
 }
 
 enum NativeVideoPreviewLoadError: Error {
@@ -634,9 +697,15 @@ struct NativeImageJoinLiveSource: @unchecked Sendable {
 }
 
 actor NativeImageJoinLiveComposer {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "LiveMix",
+        category: "ImageJoinLivePipeline"
+    )
+
     func compose(
         sources: [NativeImageJoinLiveSource],
-        mode: ImageJoinMode
+        mode: ImageJoinMode,
+        canvasStyle: ImageJoinCanvasStyle
     ) async throws -> NativeLiveDraft {
         guard !sources.isEmpty else {
             throw ImageCollageRenderError.emptyInput
@@ -679,6 +748,11 @@ actor NativeImageJoinLiveComposer {
         }
 
         let template = ImageJoinLayout.liveTemplate(for: sources.count, mode: mode)
+        let renderSize = ImageJoinLayout.liveOutputSize(
+            for: sources.count,
+            mode: mode,
+            canvasStyle: canvasStyle
+        )
         let edits = sources.map { source in
             let edit = source.edit.clamped()
             return NativeSlotEdit(
@@ -695,14 +769,16 @@ actor NativeImageJoinLiveComposer {
             sourceURLs: sourceVideoURLs,
             template: template,
             edits: edits,
-            outputURL: composedVideoURL
+            outputURL: composedVideoURL,
+            renderSize: renderSize
         )
 
         let stillImage = try ImageCollageRenderer.join(
             images: sources.map(\.image),
             edits: sources.map(\.edit),
             mode: mode,
-            tileSize: 1080
+            canvasStyle: canvasStyle,
+            tileSize: ImageJoinLayout.tileSize(for: renderSize, mode: mode)
         )
         guard let stillImageData = stillImage.jpegData(compressionQuality: 0.95) else {
             throw NativeLivePhotoComposerError.stillFrameFailed
@@ -752,6 +828,9 @@ actor NativeImageJoinLiveComposer {
         }
 
         let videoSize = normalizedVideoSize(for: image.size)
+        logger.info(
+            "Writing static image video: imageSize=\(describe(image.size), privacy: .public), orientation=\(image.imageOrientation.rawValue), videoSize=\(describe(videoSize), privacy: .public)"
+        )
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
         let input = AVAssetWriterInput(
             mediaType: .video,
@@ -766,7 +845,7 @@ actor NativeImageJoinLiveComposer {
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(
             assetWriterInput: input,
             sourcePixelBufferAttributes: [
-                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB,
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
                 kCVPixelBufferWidthKey as String: Int(videoSize.width),
                 kCVPixelBufferHeightKey as String: Int(videoSize.height),
             ]
@@ -803,8 +882,12 @@ actor NativeImageJoinLiveComposer {
             writerBox.value.finishWriting {
                 let writer = writerBox.value
                 if writer.status == .completed {
+                    logger.info("Static image video completed: bytes=\(fileSize(at: outputURL))")
                     continuation.resume()
                 } else {
+                    logger.error(
+                        "Static image video failed: status=\(writer.status.rawValue), error=\(String(reflecting: writer.error), privacy: .public)"
+                    )
                     continuation.resume(throwing: writer.error ?? NativeLivePhotoComposerError.exportFailed)
                 }
             }
@@ -833,35 +916,42 @@ actor NativeImageJoinLiveComposer {
             kCFAllocatorDefault,
             Int(size.width),
             Int(size.height),
-            kCVPixelFormatType_32ARGB,
+            kCVPixelFormatType_32BGRA,
             attributes,
             &pixelBuffer
         )
 
         guard status == kCVReturnSuccess, let pixelBuffer else { return nil }
 
-        CVPixelBufferLockBaseAddress(pixelBuffer, [])
-        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
+        let normalizedImage = ImageOrientationNormalizer.normalized(image)
+        guard let cgImage = normalizedImage.cgImage else { return nil }
 
-        guard let context = CGContext(
-            data: CVPixelBufferGetBaseAddress(pixelBuffer),
-            width: Int(size.width),
-            height: Int(size.height),
-            bitsPerComponent: 8,
-            bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
-        ) else {
-            return nil
-        }
-
-        UIGraphicsPushContext(context)
-        UIColor.black.setFill()
-        UIRectFill(CGRect(origin: .zero, size: size))
-        image.draw(in: CGRect(origin: .zero, size: size))
-        UIGraphicsPopContext()
+        let sourceImage = CIImage(cgImage: cgImage)
+        guard sourceImage.extent.width > 0, sourceImage.extent.height > 0 else { return nil }
+        let renderedImage = sourceImage.transformed(
+            by: CGAffineTransform(
+                scaleX: size.width / sourceImage.extent.width,
+                y: size.height / sourceImage.extent.height
+            )
+        )
+        let context = CIContext(options: [.cacheIntermediates: false])
+        context.render(
+            renderedImage,
+            to: pixelBuffer,
+            bounds: CGRect(origin: .zero, size: size),
+            colorSpace: CGColorSpaceCreateDeviceRGB()
+        )
 
         return pixelBuffer
+    }
+
+    private static func fileSize(at url: URL) -> Int64 {
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+        return Int64(values?.fileSize ?? 0)
+    }
+
+    private static func describe(_ size: CGSize) -> String {
+        String(format: "%.0fx%.0f", size.width, size.height)
     }
 
     private func cleanup(urls: [URL]) {

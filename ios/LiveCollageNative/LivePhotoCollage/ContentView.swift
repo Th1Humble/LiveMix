@@ -721,7 +721,10 @@ private struct LiveComposerScreen: View {
     @State private var isGenerating = false
     @State private var isResultPresented = false
     @State private var liveDraft: NativeLiveDraft?
-    @State private var message: LiveComposerMessage = .localOnly
+    @State private var message: LiveComposerMessage = .none
+    @State private var durationLimitAlertSlot = 0
+    @State private var isDurationLimitAlertPresented = false
+    @AppStorage("singleVideoCanvasStyle") private var singleVideoCanvasStyle: SingleVideoCanvasStyle = .original
 
     init(template: NativeCollageTemplate) {
         self.template = template
@@ -746,6 +749,28 @@ private struct LiveComposerScreen: View {
                             .font(.system(size: 14))
                             .lineSpacing(4)
                             .foregroundStyle(AppTheme.muted)
+                        Label(
+                            language.videoDurationLimit(Int(NativeVideoInputLimits.maximumDuration)),
+                            systemImage: "timer"
+                        )
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.primary)
+                        .padding(.top, 3)
+                    }
+
+                    if isSingleVideoTemplate {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(language.text(.videoCanvasStyle))
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppTheme.ink)
+                            Picker(language.text(.videoCanvasStyle), selection: $singleVideoCanvasStyle) {
+                                ForEach(SingleVideoCanvasStyle.allCases) { style in
+                                    Text(style.localizedTitle(language)).tag(style)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .disabled(isGenerating)
+                        }
                     }
 
                     VStack(spacing: 12) {
@@ -756,6 +781,7 @@ private struct LiveComposerScreen: View {
                             activeSlot: activeSlot,
                             loadingSlots: loadingSlots,
                             isGenerating: isGenerating,
+                            canvasAspectRatio: livePreviewAspectRatio,
                             maxSelectionCount: { index in
                                 selectableVideoLimit(startingAt: index)
                             },
@@ -857,11 +883,42 @@ private struct LiveComposerScreen: View {
                 LiveResultScreen(draft: liveDraft)
             }
         }
+        .alert(
+            language.text(.videoTooLongTitle),
+            isPresented: $isDurationLimitAlertPresented
+        ) {
+            Button(language.text(.chooseAnotherVideo), role: .cancel) {}
+        } message: {
+            Text(
+                language.videoTooLong(
+                    durationLimitAlertSlot,
+                    maximumDuration: Int(NativeVideoInputLimits.maximumDuration)
+                )
+            )
+        }
         .onChange(of: replacementPickerItem) { newItem in
             guard let newItem else { return }
             replaceActiveSlot(with: newItem)
             replacementPickerItem = nil
         }
+        .onChange(of: singleVideoCanvasStyle) { _ in
+            liveDraft = nil
+        }
+    }
+
+    private var isSingleVideoTemplate: Bool {
+        template.id == "video-to-live"
+    }
+
+    private var livePreviewAspectRatio: CGFloat {
+        guard isSingleVideoTemplate,
+              singleVideoCanvasStyle == .original,
+              let sourceSize = videoPreviews.first.flatMap({ $0 })?.displaySize,
+              let outputSize = NativeVideoRenderLayout.singleVideoOutputSize(for: sourceSize),
+              outputSize.height > 0 else {
+            return 1
+        }
+        return outputSize.width / outputSize.height
     }
 
     private var filledCount: Int {
@@ -933,16 +990,30 @@ private struct LiveComposerScreen: View {
         let targetSlots = Array(batchTargetSlots(startingAt: startIndex).prefix(items.count))
         guard !targetSlots.isEmpty else { return }
 
+        var assignments: [(slot: Int, item: PhotosPickerItem)] = []
+        var firstRejectedSlot: Int?
+
         for (slotIndex, item) in zip(targetSlots, items) {
+            if Self.isKnownToExceedDurationLimit(item) {
+                firstRejectedSlot = firstRejectedSlot ?? slotIndex
+                continue
+            }
+
             selectedItems[slotIndex] = item
             clearPreview(at: slotIndex)
             slotEdits[slotIndex] = NativeSlotEdit.default.withDuration(outputDuration)
+            assignments.append((slot: slotIndex, item: item))
         }
 
-        activeSlot = targetSlots[0]
-        message = targetSlots.count == 1 ? .loadingVideo : .loadingVideos(targetSlots.count)
+        if let firstRejectedSlot {
+            presentDurationLimit(for: firstRejectedSlot)
+        }
 
-        let assignments = zip(targetSlots, items).map { (slot: $0.0, item: $0.1) }
+        guard !assignments.isEmpty else { return }
+
+        activeSlot = assignments[0].slot
+        message = assignments.count == 1 ? .loadingVideo : .loadingVideos(assignments.count)
+
         Task {
             await startVideoPreviewLoads(assignments: assignments)
         }
@@ -950,6 +1021,11 @@ private struct LiveComposerScreen: View {
 
     private func replaceActiveSlot(with item: PhotosPickerItem) {
         guard selectedItems.indices.contains(activeSlot) else { return }
+
+        guard !Self.isKnownToExceedDurationLimit(item) else {
+            presentDurationLimit(for: activeSlot)
+            return
+        }
 
         selectedItems[activeSlot] = item
         clearPreview(at: activeSlot)
@@ -1002,6 +1078,7 @@ private struct LiveComposerScreen: View {
             selectedItems[slot] = nil
             clearPreview(at: slot)
             message = .videoTooLong(slot)
+            presentDurationLimit(for: slot)
         } catch {
             Self.logger.error(
                 "Video preview failed for slot \(slot + 1): \(String(reflecting: error), privacy: .public)"
@@ -1055,6 +1132,11 @@ private struct LiveComposerScreen: View {
         return asset.duration
     }
 
+    private static func isKnownToExceedDurationLimit(_ item: PhotosPickerItem) -> Bool {
+        guard let duration = photoLibraryDuration(for: item), duration.isFinite else { return false }
+        return duration > NativeVideoInputLimits.maximumDuration
+    }
+
     nonisolated private static func validateVideoDuration(_ duration: Double) throws {
         guard duration.isFinite, duration > 0 else {
             throw NativeLivePhotoComposerError.unreadableVideo
@@ -1062,6 +1144,12 @@ private struct LiveComposerScreen: View {
         guard duration <= NativeVideoInputLimits.maximumDuration else {
             throw NativeVideoPreviewLoadError.durationTooLong
         }
+    }
+
+    private func presentDurationLimit(for slot: Int) {
+        durationLimitAlertSlot = slot
+        message = .videoTooLong(slot)
+        isDurationLimitAlertPresented = true
     }
 
     private func clearPreview(at index: Int) {
@@ -1123,7 +1211,12 @@ private struct LiveComposerScreen: View {
 
         do {
             let sourceURLs = videoPreviews.compactMap { $0?.url }
-            let draft = try await composer.compose(template: template, videoURLs: sourceURLs, edits: slotEdits)
+            let draft = try await composer.compose(
+                template: template,
+                videoURLs: sourceURLs,
+                edits: slotEdits,
+                singleVideoCanvasStyle: singleVideoCanvasStyle
+            )
             liveDraft = draft
             isResultPresented = true
             message = .generated
@@ -1137,7 +1230,7 @@ private struct LiveComposerScreen: View {
 }
 
 private enum LiveComposerMessage: Hashable {
-    case localOnly
+    case none
     case loadingVideo
     case loadingVideos(Int)
     case unreadableVideo(Int)
@@ -1149,10 +1242,10 @@ private enum LiveComposerMessage: Hashable {
     case generated
     case failed
 
-    func text(language: AppLanguage) -> String {
+    func text(language: AppLanguage) -> String? {
         switch self {
-        case .localOnly:
-            return language.text(.localOnlyMessage)
+        case .none:
+            return nil
         case .loadingVideo:
             return language.text(.loadingVideo) + "..."
         case .loadingVideos(let count):
@@ -1189,6 +1282,7 @@ private struct LiveUploadPreview: View {
     let activeSlot: Int
     let loadingSlots: Set<Int>
     let isGenerating: Bool
+    let canvasAspectRatio: CGFloat
     let maxSelectionCount: (Int) -> Int
     let onPickItems: (Int, [PhotosPickerItem]) -> Void
     let onUpdateFocal: (Int, CGFloat, CGFloat) -> Void
@@ -1244,7 +1338,8 @@ private struct LiveUploadPreview: View {
                 }
             }
         }
-        .aspectRatio(1, contentMode: .fit)
+        .aspectRatio(canvasAspectRatio, contentMode: .fit)
+        .frame(maxHeight: 520)
         .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay {
@@ -1774,10 +1869,12 @@ private struct NativeLiveEditControls: View {
                 }
             }
 
-            Text(message.text(language: language))
-                .font(.system(size: 13))
-                .lineSpacing(3)
-                .foregroundStyle(AppTheme.muted)
+            if let messageText = message.text(language: language) {
+                Text(messageText)
+                    .font(.system(size: 13))
+                    .lineSpacing(3)
+                    .foregroundStyle(AppTheme.muted)
+            }
 
             Text(
                 hasMedia
@@ -2271,6 +2368,11 @@ private struct NativeImageSource: Identifiable {
 }
 
 private enum NativeImageSourceLoader {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "LiveMix",
+        category: "ImageSourceLoader"
+    )
+
     enum LoadError: Error {
         case unreadableImage
         case missingPairedVideo
@@ -2282,11 +2384,18 @@ private enum NativeImageSourceLoader {
               let image = UIImage(data: data) else {
             throw LoadError.unreadableImage
         }
+        let rawPixelSize = image.cgImage.map {
+            CGSize(width: $0.width, height: $0.height)
+        } ?? .zero
+        let normalizedImage = ImageOrientationNormalizer.normalized(image)
+        logger.info(
+            "Image imported: orientation=\(image.imageOrientation.rawValue), pointSize=\(describe(image.size), privacy: .public), rawPixels=\(describe(rawPixelSize), privacy: .public), normalizedPixels=\(describe(normalizedImage.size), privacy: .public)"
+        )
 
         let shouldContainLiveVideo = looksLikeLivePhoto(item)
         do {
             if let liveVideoURL = try await liveVideoURL(from: item) {
-                return NativeImageSource(image: image, liveVideoURL: liveVideoURL)
+                return NativeImageSource(image: normalizedImage, liveVideoURL: liveVideoURL)
             }
         } catch {
             if shouldContainLiveVideo {
@@ -2298,7 +2407,11 @@ private enum NativeImageSourceLoader {
             throw LoadError.missingPairedVideo
         }
 
-        return NativeImageSource(image: image)
+        return NativeImageSource(image: normalizedImage)
+    }
+
+    private static func describe(_ size: CGSize) -> String {
+        String(format: "%.0fx%.0f", size.width, size.height)
     }
 
     private static func liveVideoURL(from item: PhotosPickerItem) async throws -> URL? {
@@ -2404,9 +2517,9 @@ private struct ImageJoinScreen: View {
     @State private var isResultPresented = false
     @State private var generatedImage: GeneratedImage?
     @State private var generatedLiveDraft: NativeLiveDraft?
+    @AppStorage("imageJoinCanvasStyle") private var canvasStyle: ImageJoinCanvasStyle = .long
 
     private let maxImages = 9
-    private let outputTileSize: CGFloat = 3240
 
     private var activeSource: NativeImageSource? {
         guard sources.indices.contains(activeIndex) else { return nil }
@@ -2414,7 +2527,22 @@ private struct ImageJoinScreen: View {
     }
 
     private var outputSize: CGSize {
-        ImageJoinLayout.outputSize(for: sources.count, mode: mode, tileSize: outputTileSize)
+        if sources.contains(where: \.isLivePhoto) {
+            return ImageJoinLayout.liveOutputSize(
+                for: sources.count,
+                mode: mode,
+                canvasStyle: canvasStyle
+            )
+        }
+
+        return ImageJoinLayout.outputSize(
+            for: sources.count,
+            mode: mode,
+            canvasStyle: canvasStyle,
+            tileSize: canvasStyle == .long
+                ? ImageJoinLayout.longImageTileSize
+                : ImageJoinLayout.squareImageCanvasSize
+        )
     }
 
     var body: some View {
@@ -2436,6 +2564,19 @@ private struct ImageJoinScreen: View {
                             .foregroundStyle(AppTheme.muted)
                     }
 
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(language.text(.canvasStyle))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppTheme.ink)
+                        Picker(language.text(.canvasStyle), selection: $canvasStyle) {
+                            ForEach(ImageJoinCanvasStyle.allCases) { style in
+                                Text(style.localizedTitle(language)).tag(style)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .disabled(isLoading || isGenerating)
+                    }
+
                     if sources.isEmpty {
                         PhotosPicker(
                             selection: $appendPickerItems,
@@ -2452,6 +2593,7 @@ private struct ImageJoinScreen: View {
                             ImageJoinCanvas(
                                 sources: sources,
                                 mode: mode,
+                                canvasStyle: canvasStyle,
                                 activeIndex: activeIndex,
                                 isLoading: isLoading || isGenerating,
                                 loadingTitle: isGenerating ? ImageGenerationFeedback.imageJoinTitle(language: language) : nil,
@@ -2536,6 +2678,10 @@ private struct ImageJoinScreen: View {
                 await replaceActiveImage(with: newItem)
                 replacementPickerItem = nil
             }
+        }
+        .onChange(of: canvasStyle) { _ in
+            generatedImage = nil
+            generatedLiveDraft = nil
         }
     }
 
@@ -2670,7 +2816,8 @@ private struct ImageJoinScreen: View {
                                 edit: $0.edit
                             )
                         },
-                        mode: mode
+                        mode: mode,
+                        canvasStyle: canvasStyle
                     )
                     generatedImage = nil
                     generatedLiveDraft = draft
@@ -2679,7 +2826,10 @@ private struct ImageJoinScreen: View {
                         images: sources.map(\.image),
                         edits: sources.map(\.edit),
                         mode: mode,
-                        tileSize: outputTileSize
+                        canvasStyle: canvasStyle,
+                        tileSize: canvasStyle == .long
+                            ? ImageJoinLayout.longImageTileSize
+                            : ImageJoinLayout.squareImageCanvasSize
                     )
                     generatedLiveDraft = nil
                     generatedImage = GeneratedImage(image: image)
@@ -3259,6 +3409,7 @@ private struct ImageJoinEmptyPicker: View {
 private struct ImageJoinCanvas: View {
     let sources: [NativeImageSource]
     let mode: ImageJoinMode
+    let canvasStyle: ImageJoinCanvasStyle
     let activeIndex: Int
     let isLoading: Bool
     var loadingTitle: String? = nil
@@ -3269,6 +3420,33 @@ private struct ImageJoinCanvas: View {
     private let slotGap: CGFloat = 0
 
     var body: some View {
+        Group {
+            if canvasStyle == .square || sources.count <= 1 {
+                canvasContent
+                    .aspectRatio(1, contentMode: .fit)
+            } else {
+                longCanvas
+            }
+        }
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.border, lineWidth: 1)
+        }
+        .overlay {
+            if let loadingTitle {
+                GenerationLoadingOverlay(title: loadingTitle)
+                    .padding(panelPadding)
+                    .transition(.opacity)
+            }
+        }
+        .opacity(isLoading ? 0.62 : 1)
+        .animation(.easeInOut(duration: 0.16), value: activeIndex)
+        .animation(.easeInOut(duration: 0.16), value: isLoading)
+    }
+
+    private var canvasContent: some View {
         GeometryReader { proxy in
             let frames = ImageJoinLayout.previewFrames(for: sources.count, mode: mode)
 
@@ -3327,23 +3505,33 @@ private struct ImageJoinCanvas: View {
                 .frame(width: innerSize(for: proxy.size).width, height: innerSize(for: proxy.size).height)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                if let loadingTitle {
-                    GenerationLoadingOverlay(title: loadingTitle)
-                        .padding(panelPadding)
-                        .transition(.opacity)
-                }
             }
         }
-        .aspectRatio(1, contentMode: .fit)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(AppTheme.border, lineWidth: 1)
+    }
+
+    private var longCanvas: some View {
+        GeometryReader { proxy in
+            let count = CGFloat(max(1, sources.count))
+            let tileEdge = mode == .horizontal
+                ? max(proxy.size.height - panelPadding * 2, 1)
+                : max(proxy.size.width - panelPadding * 2, 1)
+            let canvasSize = mode == .horizontal
+                ? CGSize(width: tileEdge * count + panelPadding * 2, height: tileEdge + panelPadding * 2)
+                : CGSize(width: tileEdge + panelPadding * 2, height: tileEdge * count + panelPadding * 2)
+
+            ScrollView(mode == .horizontal ? .horizontal : .vertical, showsIndicators: true) {
+                canvasContent
+                    .frame(width: canvasSize.width, height: canvasSize.height)
+            }
         }
-        .opacity(isLoading ? 0.62 : 1)
-        .animation(.easeInOut(duration: 0.16), value: activeIndex)
-        .animation(.easeInOut(duration: 0.16), value: isLoading)
+        .frame(height: longCanvasViewportHeight)
+    }
+
+    private var longCanvasViewportHeight: CGFloat {
+        if mode == .horizontal {
+            return 240
+        }
+        return min(CGFloat(max(1, sources.count)) * 200, 420)
     }
 
     private func innerSize(for size: CGSize) -> CGSize {
